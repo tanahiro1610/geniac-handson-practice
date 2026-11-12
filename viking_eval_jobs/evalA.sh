@@ -3,7 +3,7 @@
 #SBATCH --partition=part-group_1a6e94
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=256G
+#SBATCH --mem=128G
 #SBATCH --time=08:00:00
 #SBATCH --output=/home/%u/logs/%x-%j.out
 # 評価A（ベースラインの評価、Qwen3.8-27B 学習前）
