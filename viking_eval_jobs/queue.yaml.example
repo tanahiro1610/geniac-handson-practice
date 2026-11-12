@@ -1,0 +1,15 @@
+# evalB queue config. Copy to ~/capx-queue/queue.yaml and replace <user> with your user name.
+root: /scratch/<user>/capx-queue/root
+master_seed: 1234          # fixed value for checking
+gateway_image: /scratch/<user>/capx-queue/images/capx-gateway.sif
+simulators:
+  robosuite:
+    image: /scratch/<user>/capx-queue/images/capx-env-robosuite.sif
+    max_lanes: 32
+subsets:
+  - name: robosuite
+    taskpack: taskpacks/original     # public pack (relative to ~/geniac_prize_2026_code)
+    simulators: [robosuite]
+slurm:
+  partition: part-group_1a6e94
+  workers: 1
