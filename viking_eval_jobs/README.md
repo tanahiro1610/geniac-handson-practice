@@ -33,6 +33,14 @@ cd ~/viking-eval && git pull && cp viking_eval_jobs/*.sh viking_eval_jobs/*.py ~
 | `pick_videos.sh` | 評価Aの動画を各タスク成功・失敗 N 本ずつ選んで `~/videos_pick.tgz` に | `sbatch ~/jobs/pick_videos.sh` |
 | `pack_outputs.sh` | 出力一式を tgz にまとめる（mp4 除く） | `bash ~/jobs/pack_outputs.sh` |
 
+## Mac で GPU の使用状況を見る
+
+`mac/gpu_watch.sh` は **Mac で動かす**スクリプトです。30 秒ごとに `ssh gmo` で squeue を取り、`~/gpu_status.html` を書き直します（ブラウザで開いておけば自動で更新）。
+
+```bash
+bash viking_eval_jobs/mac/gpu_watch.sh     # Ctrl+C で止める
+```
+
 ## 必ず守ること
 
 - **`--mem` を必ず付ける**（付けないとノードの全メモリを要求し、チーム全体が止まる）。
