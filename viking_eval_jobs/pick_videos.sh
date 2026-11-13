@@ -8,7 +8,7 @@
 # Pick a few evalA videos per task (successes and real failures) into ~/videos_pick.tgz
 #   sbatch ~/jobs/pick_videos.sh
 #   sbatch --export=ALL,N=3,TASKS="spill_wipe two_arm_lift" ~/jobs/pick_videos.sh
-# A failure is a seed with no taskcompleted_1 folder; its last folder is copied.
+# Each seed's videos sit in the folder of its final state; ok = sandboxrc_0 and taskcompleted_1 there.
 set -euo pipefail
 N=${N:-2}
 TASKS=${TASKS:-"cube_lifting cube_stack cube_restack spill_wipe nut_assembly two_arm_handover two_arm_lift"}
@@ -21,18 +21,19 @@ for t in $TASKS; do
     seeds=$(ls -d $d/trial_* 2>/dev/null | sed -E 's#.*/trial_([0-9]+)_.*#\1#' | sort -u)
     ok=0; ng=0
     for s in $seeds; do
-      last=$(ls -d $d/trial_${s}_* | tail -1)
-      if ls -d $d/trial_${s}_*_taskcompleted_1 >/dev/null 2>&1; then
-        [ $ok -ge $N ] && continue
-        kind=ok; ok=$((ok+1)); src=$(ls -d $d/trial_${s}_*_taskcompleted_1 | tail -1)
-      else
-        [ $ng -ge $N ] && continue
-        kind=ng; ng=$((ng+1)); src=$last
-      fi
+      # videos are written once per seed, into the folder of its final state (the one scored)
+      src=""
+      for x in $d/trial_${s}_*; do [ -f "$x/video_combined.mp4" ] && src=$x; done
+      if [ -z "$src" ]; then echo "no video for $t seed $s"; continue; fi
+      case "$src" in
+        *sandboxrc_0_*taskcompleted_1) [ $ok -ge $N ] && continue; kind=ok; ok=$((ok+1));;
+        *) [ $ng -ge $N ] && continue; kind=ng; ng=$((ng+1));;
+      esac
       dst=$OUT/$t/${kind}_seed${s}
       mkdir -p "$dst"
-      cp $src/*.mp4 "$dst"/ 2>/dev/null || echo "no mp4 in $src"
+      cp $src/*.mp4 "$dst"/
       cp $src/summary.txt "$dst"/ 2>/dev/null || true
+      echo "$src" > "$dst"/source.txt
     done
   done
 done
