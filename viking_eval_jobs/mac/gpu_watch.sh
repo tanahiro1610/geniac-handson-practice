@@ -17,14 +17,14 @@ SSH=(ssh -o ControlMaster=auto -o ControlPath="$CP" -o ControlPersist=10m -o Con
 
 "${SSH[@]}" true || { echo "ssh $HOST failed"; exit 1; }
 ME=$("${SSH[@]}" 'echo $USER')
-trap '"${SSH[@]}" -O exit >/dev/null 2>&1; echo; echo stopped; exit 0' INT TERM
+trap '"${SSH[@]}" -O exit >/dev/null 2>&1; rm -f "$TASKF"; echo; echo stopped; exit 0' INT TERM
 touch "$HIST" "$NAMES"
 
 render() {
   local data="$1" now="$2" err="$3" epoch
   epoch=$(date +%s)
   echo "$data" | awk -F'|' -v me="$ME" -v total="$TEAM_GPUS" -v now="$now" -v epoch="$epoch" \
-      -v interval="$INTERVAL" -v part="$PART" -v err="$err" -v hist="$HIST" -v names="$NAMES" '
+      -v interval="$INTERVAL" -v part="$PART" -v err="$err" -v hist="$HIST" -v names="$NAMES" -v taskf="$TASKF" '
     function e(s){ gsub(/&/,"\\&amp;",s); gsub(/</,"\\&lt;",s); gsub(/>/,"\\&gt;",s); return s }
     function gpus(s,  n){ if (s !~ /gpu/) return 0; n=s; sub(/.*gpu[^0-9]*/,"",n); n+=0; return (n>0?n:1) }
     function secs(t,  d,p,a,n){ if (t !~ /^[0-9]/) return 0; d=0
@@ -38,14 +38,16 @@ render() {
       if (r ~ /GRES/) c="#f59e0b"; else if (r ~ /Cpu/) c="#f97316"; else if (r ~ /Mem/) c="#ef4444"
       else if (r ~ /Dependency/) c="#8b5cf6"; else if (r ~ /ArrayTaskLimit/) c="#06b6d4"; else if (r ~ /Priority|Resources/) c="#3b82f6"
       return "<span class=\"chip\" style=\"--c:" c "\">" e(r) "</span>" }
-    BEGIN { while ((getline line < names) > 0) { split(line,a," "); if (a[1]!="") { sub(/^[^ ]+ +/,"",line); alias[a[1]]=line } } }
+    BEGIN { while ((getline line < names) > 0) { split(line,a," "); if (a[1]!="") { sub(/^[^ ]+ +/,"",line); alias[a[1]]=line } }
+            while ((getline line < taskf) > 0) { split(line,a,"|"); if (a[1]!="") TK[a[1]]=a[2] } }
     NF>=9 {
       for (k=1;k<=NF;k++) gsub(/^ +| +$/,"",$k)
       g=gpus($6)
       if ($4=="RUNNING") {
         nr++; R_id[nr]=$1; R_u[nr]=$2; R_n[nr]=$3; R_g[nr]=g; R_t[nr]=secs($5); R_l[nr]=secs($10); R_c[nr]=$7; R_m[nr]=$8
+        R_task[nr]=(($11 in TK) ? TK[$11] : "")
         used+=g; if ($2==me) mine+=g
-      } else { np++; P_id[np]=$1; P_u[np]=$2; P_n[np]=$3; P_g[np]=g; P_r[np]=$9 }
+      } else { np++; P_id[np]=$1; P_u[np]=$2; P_n[np]=$3; P_g[np]=g; P_r[np]=$9; P_c[np]=$7; P_m[np]=$8 }
     }
     END {
       if (err=="") { print epoch, used+0 >> hist; close(hist) }
@@ -62,7 +64,7 @@ render() {
       print ".stats{display:flex;gap:10px;margin-top:10px;width:100%}.stat{flex:1;text-align:center;background:#0e1528;border-radius:10px;padding:8px}.stat b{display:block;font-size:20px}.stat span{font-size:11px;color:var(--sub)}"
       print ".slots{display:grid;grid-template-columns:repeat(" total ",1fr);gap:12px}.slot{border-radius:14px;padding:14px;min-height:150px;background:var(--free);border:1px dashed #2a3658;display:flex;flex-direction:column;justify-content:space-between}"
       print ".slot.busy{border:1px solid hsl(var(--h) 70% 55% / .6);background:linear-gradient(160deg,hsl(var(--h) 70% 45% / .28),var(--card) 70%)}.slot.me{box-shadow:0 0 0 2px #22c55e inset}"
-      print ".slot .gpu{font-size:11px;color:var(--sub);letter-spacing:.1em}.slot .name{font-size:16px;font-weight:700;margin:6px 0 2px;word-break:break-all}.slot .user{font-size:13px;color:hsl(var(--h) 80% 75%)}.slot.free .name{color:#56628a;font-weight:600}"
+      print ".slot .gpu{font-size:11px;color:var(--sub);letter-spacing:.1em;display:flex;justify-content:space-between}.slot .jid{letter-spacing:0;font-family:ui-monospace,Menlo,monospace;color:#c7d2fe}.spec{display:flex;gap:6px;margin-top:8px}.spec span{font-size:11px;padding:2px 8px;border-radius:6px;background:#0b1224;color:#c7d2fe;border:1px solid var(--line)}.slot .name{font-size:16px;font-weight:700;margin:6px 0 2px;word-break:break-all}.slot .user{font-size:13px;color:hsl(var(--h) 80% 75%)}.slot.free .name{color:#56628a;font-weight:600}"
       print ".bar{height:6px;border-radius:3px;background:#0b1224;overflow:hidden;margin-top:10px}.bar i{display:block;height:100%;background:hsl(var(--h) 75% 55%)}.bar i.warn{background:#ef4444}.meta{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);margin-top:6px}"
       print "h2{font-size:14px;color:var(--sub);font-weight:600;margin:0 0 10px;letter-spacing:.05em}table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--sub);font-weight:500}tr.me td:first-child{box-shadow:inset 3px 0 #22c55e}"
       print ".chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;background:color-mix(in srgb,var(--c) 22%,transparent);color:var(--c);border:1px solid color-mix(in srgb,var(--c) 50%,transparent)}"
@@ -81,7 +83,9 @@ render() {
       s=0
       for (i=1;i<=nr;i++) for (j=1;j<=R_g[i] && s<total;j++) { s++
         h=hue(R_u[i]); lim=R_l[i]; frac=(lim>0? R_t[i]/lim : 0); if (frac>1) frac=1
-        printf "<div class=\"slot busy%s\" style=\"--h:%d\"><div><div class=\"gpu\">GPU %d</div><div class=\"name\">%s</div><div class=\"user\">%s</div></div>", (R_u[i]==me?" me":""), h, s, e(R_n[i]), e(who(R_u[i]))
+        title=(R_task[i]!="" ? R_task[i] : R_n[i]); sub2=(R_task[i]!="" ? who(R_u[i]) " · " R_n[i] : who(R_u[i]))
+        printf "<div class=\"slot busy%s\" style=\"--h:%d\"><div><div class=\"gpu\"><span>GPU %d</span><span class=\"jid\">#%s</span></div><div class=\"name\">%s</div><div class=\"user\">%s</div>", (R_u[i]==me?" me":""), h, s, e(R_id[i]), e(title), e(sub2)
+        printf "<div class=\"spec\"><span>%s コア</span><span>%s</span></div></div>", R_c[i], e(R_m[i])
         printf "<div><div class=\"bar\"><i class=\"%s\" style=\"width:%d%%\"></i></div><div class=\"meta\"><span>%s 経過</span><span>%s</span></div></div></div>\n", (frac>.85?"warn":""), frac*100, hm(R_t[i]), (lim>0? "上限 " hm(lim) : "#" e(R_id[i]))
       }
       while (s<total) { s++; printf "<div class=\"slot free\"><div><div class=\"gpu\">GPU %d</div><div class=\"name\">空き</div></div><div class=\"meta\"><span>いつでも使えます</span></div></div>\n", s }
@@ -98,8 +102,8 @@ render() {
         mins=int((HT[nh]-HT[n0])/60); printf "<div class=\"meta\"><span>%d 分前</span><span>今</span></div>", mins
       } else print "<div class=\"empty\">記録をためています（2 回目の更新から表示）</div>"
       print "</div><div class=\"card\"><h2>待っているジョブ</h2>"
-      if (np) { print "<table><tr><th>ジョブ</th><th>ユーザー</th><th>名前</th><th>理由</th></tr>"
-        for (i=1;i<=np;i++) printf "<tr%s><td>%s</td><td><span class=\"u\" style=\"--h:%d\"></span>%s</td><td>%s</td><td>%s</td></tr>\n", (P_u[i]==me?" class=\"me\"":""), e(P_id[i]), hue(P_u[i]), e(who(P_u[i])), e(P_n[i]), chip(P_r[i])
+      if (np) { print "<table><tr><th>ジョブ</th><th>ユーザー</th><th>名前</th><th>コア</th><th>メモリ</th><th>理由</th></tr>"
+        for (i=1;i<=np;i++) printf "<tr%s><td>%s</td><td><span class=\"u\" style=\"--h:%d\"></span>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", (P_u[i]==me?" class=\"me\"":""), e(P_id[i]), hue(P_u[i]), e(who(P_u[i])), e(P_n[i]), P_c[i], e(P_m[i]), chip(P_r[i])
         print "</table>" } else print "<div class=\"empty\">なし</div>"
       print "</div></div>"
       k=0; for (i=1;i<=nr;i++) if (R_g[i]==0) k++
@@ -112,16 +116,36 @@ render() {
   tail -n 2000 "$HIST" > "$HIST.tmp" 2>/dev/null && mv "$HIST.tmp" "$HIST"
 }
 
+# Runs on the login node: the queue, then "rawjobid|task" read from the first "== <task>" line
+# of each running job's log in ~/logs (own jobs; others' only if their logs are readable).
+REMOTE=$(cat <<'R'
+P=$1
+S=$(squeue -p "$P" -h -r -O "JobArrayID:24|,UserName:24|,Name:30|,State:12|,TimeUsed:14|,tres-alloc:100|,NumCPUs:8|,MinMemory:10|,ReasonList:60|,TimeLimit:14|,JobID:16|" 2>/dev/null)
+if ! printf '%s\n' "$S" | grep -q '|'; then S=$(squeue -p "$P" -h -r -o '%i|%u|%j|%T|%M|%b|%C|%m|%R|%l|%i') || exit 1; fi
+printf '%s\n' "$S"
+echo "@@TASKS"
+printf '%s\n' "$S" | awk -F'|' '{ for (k=1;k<=NF;k++) gsub(/^ +| +$/,"",$k); if ($4=="RUNNING") print $11 "|" $2 }' |
+while IFS='|' read -r j u; do
+  f=$(ls /home/"$u"/logs/*-"$j".out 2>/dev/null | head -1)
+  [ -n "$f" ] || continue
+  task=$(grep -m1 '^== ' "$f" 2>/dev/null | cut -d' ' -f2)
+  [ -n "$task" ] && echo "$j|$task"
+done
+true
+R
+)
+TASKF=$(mktemp)
+
 first=1
 while true; do
   now=$(date "+%H:%M:%S")
-  # tres-alloc shows the GPUs a running job really holds (gres/gpu=1), however it asked for them;
-  # older Slurm without -O suffixes falls back to %b (the --gres request).
-  q1="squeue -p $PART -h -r -O 'JobArrayID:24|,UserName:24|,Name:30|,State:12|,TimeUsed:14|,tres-alloc:100|,NumCPUs:8|,MinMemory:10|,ReasonList:60|,TimeLimit:14|'"
-  q2="squeue -p $PART -h -r -o '%i|%u|%j|%T|%M|%b|%C|%m|%R|%l'"
   err=""
-  if data=$("${SSH[@]}" "$q1" 2>/dev/null) && echo "$data" | grep -q '|'; then :
-  elif ! data=$("${SSH[@]}" "$q2" 2>&1); then err="$data"; data=""; fi
+  if out=$("${SSH[@]}" bash -s -- "$PART" <<<"$REMOTE" 2>&1); then
+    data=$(printf '%s\n' "$out" | sed '/^@@TASKS$/,$d')
+    printf '%s\n' "$out" | sed '1,/^@@TASKS$/d' > "$TASKF"
+  else
+    err="$out"; data=""; : > "$TASKF"
+  fi
   render "$data" "$now" "$err"
   if [ $first = 1 ]; then open "$OUT" 2>/dev/null || echo "open $OUT in your browser"; first=0; fi
   echo "$now updated $OUT"
