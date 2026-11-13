@@ -23,6 +23,7 @@ cd ~/viking-eval && git pull && cp viking_eval_jobs/*.sh viking_eval_jobs/*.py ~
 |---|---|---|
 | `evalA.sh` | 評価A（ベースライン repo）。1タスク×seed 401-450 | `sbatch --export=ALL,TASK=cube_lifting,OFF=1700 ~/jobs/evalA.sh` |
 | 〃（配列） | 7タスクを同時2本まで | `sbatch --array=0-6%2 ~/jobs/evalA.sh` |
+| `evalA_libero.sh` | 評価A の LIBERO-PRO（30タスク、運営の eval_base_libero.yaml と同じ条件）。OFF は自動で選ぶ | `sbatch --array=0-29%3 ~/jobs/evalA_libero.sh` |
 | `eval_sft.sh` | SFT 済みモデルの学習前/学習後比較 | 手順書「SFT済みモデルの評価手順書」参照 |
 | `make_chat_template.py` | Qwen 系チャットテンプレートの自動生成（eval_sft.sh が呼ぶ） | — |
 | `copy_to_shared.sh` | モデル・アダプタを共有領域へコピー（権限付与つき） | `bash ~/jobs/copy_to_shared.sh <元> <先>` |
