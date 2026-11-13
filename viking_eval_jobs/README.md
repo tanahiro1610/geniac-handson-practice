@@ -35,7 +35,7 @@ cd ~/viking-eval && git pull && cp viking_eval_jobs/*.sh viking_eval_jobs/*.py ~
 
 ## Mac で GPU の使用状況を見る
 
-`mac/gpu_watch.sh` は **Mac で動かす**スクリプトです。30 秒ごとに `ssh gmo` で squeue を取り、`~/gpu_status.html` を書き直します（ブラウザで開いておけば自動で更新）。
+`mac/gpu_watch.sh` は **Mac で動かす**スクリプトです。30 秒ごとに `ssh gmo` で squeue を取り、`~/gpu_status.html`（GPU の使用率メーター、GPU ごとのジョブと経過時間、直近の使用量グラフ、待っているジョブ）を書き直します。ブラウザで開いておけば自動で更新されます。`~/.gpu_watch_names` に「ユーザーID 表示名」を1行ずつ書くと、ID の代わりに名前で出ます。
 
 ```bash
 bash viking_eval_jobs/mac/gpu_watch.sh     # Ctrl+C で止める
