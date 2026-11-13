@@ -29,6 +29,7 @@ cd ~/viking-eval && git pull && cp viking_eval_jobs/*.sh viking_eval_jobs/*.py ~
 | `evalB_submit.sh` | 評価B（運営の evalq）へ CaP-Agent0 を投入 | `sbatch --export=ALL,SUB_ID=robosuite-1 ~/jobs/evalB_submit.sh` |
 | `queue.yaml.example` | 評価B のキュー設定ひな形（`<user>` を置換して `~/capx-queue/queue.yaml` へ） | — |
 | `download_models.sh` | 評価A用モデル（Qwen3.8-27B / Molmo2-8B）のダウンロード | `sbatch ~/jobs/download_models.sh` |
+| `pick_videos.sh` | 評価Aの動画を各タスク成功・失敗 N 本ずつ選んで `~/videos_pick.tgz` に | `sbatch ~/jobs/pick_videos.sh` |
 | `pack_outputs.sh` | 出力一式を tgz にまとめる（mp4 除く） | `bash ~/jobs/pack_outputs.sh` |
 
 ## 必ず守ること
