@@ -1,0 +1,22 @@
+# The CaP-Agent0 reference submission with only the model swapped: Qwen3.6-27B -> Qwen3.8-27B.
+# Same image (capx-submission-agent0.sif), same runner (ensemble on, 16 lanes), same perception.
+team_id: viking-q38
+submission_id: q38
+weights:
+  - repo: Qwen/Qwen3.8-27B
+    revision: 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
+    path: /models/qwen3.8-27b
+  - repo: facebook/sam3
+    revision: 3c879f39826c281e95690f02c7821c4de09afae7
+    path: /models/sam3
+    gated: true
+  - repo: google/owlv2-large-patch14-ensemble
+    revision: 95e26936e865f87db1742128404b3c035d47d89d
+    path: /models/owlv2-large-patch14-ensemble
+  - repo: facebook/sam2.1-hiera-large
+    revision: 665f8e2ad61cf5f53d65644ff27c8ee525124610
+    path: /models/sam2.1-hiera-large
+env:
+  CAPX_MODEL: Qwen/Qwen3.8-27B
+  CAPX_MODEL_PATH: /models/qwen3.8-27b
+  CAPX_SAM3_CHECKPOINT: /models/sam3/sam3.pt

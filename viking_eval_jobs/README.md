@@ -60,3 +60,7 @@ open ~/viking-eval/viking_eval_jobs/mac
 - SAM3 `Inference failed` の対応
 
 （リンクはチームの共有先を参照）
+
+## 評価B：モデル比較（evalB_cmp/）
+
+CaP-Agent0 の参照実装でモデルだけ差し替えて比べる（Qwen3.6-27B と Qwen3.8-27B）。手順は [evalB_cmp/README.md](evalB_cmp/README.md)。
