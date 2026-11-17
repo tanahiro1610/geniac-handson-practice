@@ -1,0 +1,32 @@
+# baseline-v1 (shared 2026-11-18): CaP-Agent0 with Qwen3.8-27B, BF16 weights (no fp8), max_tokens 32768
+# (runner-baseline-v1.yaml), context 65536, thinking on, 9 candidates + synthesis, 16 lanes.
+# Needs the image built by bv1/prepare_bv1.sh (capx-submission-bv1.sif): its entrypoint reads
+# CAPX_QUANTIZATION / CAPX_KV_CACHE_DTYPE. KV cache: auto (= BF16, undecided in baseline-v1).
+# Reasoning effort: low, set on the server (the operations baseline collected its data at low).
+# CAPX_SERVE_EXTRA_ARGS replaces the image default, so --attention-backend TRITON_ATTN is repeated;
+# no spaces in the JSON (the entrypoint splits this variable on whitespace).
+team_id: viking-bv1low
+submission_id: bv1low
+weights:
+  - repo: Qwen/Qwen3.8-27B
+    revision: 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
+    path: /models/qwen3.8-27b
+  - repo: facebook/sam3
+    revision: 3c879f39826c281e95690f02c7821c4de09afae7
+    path: /models/sam3
+    gated: true
+  - repo: google/owlv2-large-patch14-ensemble
+    revision: 95e26936e865f87db1742128404b3c035d47d89d
+    path: /models/owlv2-large-patch14-ensemble
+  - repo: facebook/sam2.1-hiera-large
+    revision: 665f8e2ad61cf5f53d65644ff27c8ee525124610
+    path: /models/sam2.1-hiera-large
+env:
+  CAPX_MODEL: Qwen/Qwen3.8-27B
+  CAPX_MODEL_PATH: /models/qwen3.8-27b
+  CAPX_SAM3_CHECKPOINT: /models/sam3/sam3.pt
+  CAPX_RUNNER_CONFIG: env_configs/gateway/runner-baseline-v1.yaml
+  CAPX_QUANTIZATION: none
+  CAPX_KV_CACHE_DTYPE: auto
+  CAPX_MAX_MODEL_LEN: "65536"
+  CAPX_SERVE_EXTRA_ARGS: '--attention-backend TRITON_ATTN --default-chat-template-kwargs {"reasoning_effort":"low"}'

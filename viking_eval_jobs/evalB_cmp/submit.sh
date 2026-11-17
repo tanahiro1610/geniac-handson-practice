@@ -15,17 +15,22 @@ set -euo pipefail
 : "${WHO:?WHO=q36 or q38}"; : "${SUB_ID:?SUB_ID=<new id>}"
 CONFIG=${CONFIG:-$HOME/capx-queue/queue-cmp.yaml}
 C=~/geniac_prize_2026_code
+IMG=/scratch/$USER/capx-queue/images/capx-submission-agent0.sif
 case $WHO in
+  bv1) MANIFEST=$HOME/viking-eval/viking_eval_jobs/evalB_cmp/bv1/submission-bv1.yaml
+       IMG=/scratch/$USER/capx-queue/images/capx-submission-bv1.sif ;;
+  bv1low) MANIFEST=$HOME/viking-eval/viking_eval_jobs/evalB_cmp/bv1/submission-bv1-low.yaml
+       IMG=/scratch/$USER/capx-queue/images/capx-submission-bv1.sif ;;
   q36) MANIFEST=$C/singularity/capx-submission-agent0.yaml ;;
   q38) MANIFEST=$HOME/viking-eval/viking_eval_jobs/evalB_cmp/submission-qwen38.yaml ;;
   q38low) MANIFEST=$HOME/viking-eval/viking_eval_jobs/evalB_cmp/submission-qwen38-low.yaml ;;
   q38nt) MANIFEST=$HOME/viking-eval/viking_eval_jobs/evalB_cmp/submission-qwen38-nothink.yaml ;;
-  *) echo "WHO must be q36, q38, q38nt or q38low"; exit 1 ;;
+  *) echo "WHO must be bv1, bv1low, q36, q38, q38nt or q38low"; exit 1 ;;
 esac
 cd $C
 export CAPX_HF_TOKEN=$(cat ~/.cache/huggingface/token)
 ~/capx-venv/bin/python -m capx.cli.main evalq submit --config "$CONFIG" \
     --manifest "$MANIFEST" \
-    --image /scratch/$USER/capx-queue/images/capx-submission-agent0.sif \
+    --image "$IMG" \
     --submission-id "$SUB_ID"
 ~/capx-venv/bin/python -m capx.cli.main evalq status --config "$CONFIG"
