@@ -42,6 +42,7 @@ for k in rs50 lp50 rs50-smoke lp50-smoke; do $P $J/make_queue_cmp.py ~/capx-queu
 S=~/viking-eval/viking_eval_jobs/evalB_cmp/submit.sh
 a=$(sbatch --parsable --export=ALL,WHO=q38,SUB_ID=smoke-1,CONFIG=$HOME/capx-queue/queue-rs50-smoke.yaml $S)
 b=$(sbatch --parsable --export=ALL,WHO=q38,SUB_ID=smoke-1,CONFIG=$HOME/capx-queue/queue-lp50-smoke.yaml $S)
+module load singularitypro/4.1   # worker は env -i で投げるので、ここで PATH に singularity を入れておく
 cd ~/geniac_prize_2026_code
 W="env -i PATH=$PATH HOME=$HOME LANG=$LANG CAPX_EVALQ_PYTHON=$HOME/capx-venv/bin/python sbatch -p part-group_1a6e94 --gres=gpu:1 --cpus-per-task=16 --mem=180G --export=ALL"
 $W --dependency=afterok:$a -t 03:00:00 --job-name=evalB-smoke-rs scripts/evalq/worker.sbatch --config ~/capx-queue/queue-rs50-smoke.yaml --max-jobs 1
@@ -61,6 +62,7 @@ r1=$(sbatch --parsable --export=ALL,WHO=q38,SUB_ID=rs50-1,CONFIG=$HOME/capx-queu
 r2=$(sbatch --parsable --dependency=afterany:$r1 --export=ALL,WHO=q36,SUB_ID=rs50-1,CONFIG=$HOME/capx-queue/queue-rs50.yaml $S)
 l1=$(sbatch --parsable --export=ALL,WHO=q38,SUB_ID=lp50-1,CONFIG=$HOME/capx-queue/queue-lp50.yaml $S)
 l2=$(sbatch --parsable --dependency=afterany:$l1 --export=ALL,WHO=q36,SUB_ID=lp50-1,CONFIG=$HOME/capx-queue/queue-lp50.yaml $S)
+module load singularitypro/4.1   # worker は env -i で投げるので、ここで PATH に singularity を入れておく
 cd ~/geniac_prize_2026_code
 W="env -i PATH=$PATH HOME=$HOME LANG=$LANG CAPX_EVALQ_PYTHON=$HOME/capx-venv/bin/python sbatch -p part-group_1a6e94 --gres=gpu:1 --cpus-per-task=16 --mem=180G --export=ALL"
 $W --dependency=afterok:$r1 -t 32:00:00 --job-name=evalB-rs50 scripts/evalq/worker.sbatch --config ~/capx-queue/queue-rs50.yaml --max-jobs 1
