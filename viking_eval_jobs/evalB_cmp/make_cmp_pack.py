@@ -45,6 +45,8 @@ ap.add_argument("--robosuite-trials", type=int, default=20)
 ap.add_argument("--libero-trials", type=int, default=10)
 ap.add_argument("--libero-pro", action="store_true",
                 help="use evalA's 30 LIBERO-PRO tasks (goal_with_mug, object_swap, spatial_swap) instead of --libero")
+ap.add_argument("--pro-groups", default="goal,object,spatial",
+                help="which LIBERO-PRO groups to include with --libero-pro (e.g. goal)")
 ap.add_argument("--libero-seeds", default=EVALA_LIBERO_SEEDS,
                 help="fixed seeds for the LIBERO-PRO tasks (default: evalA's 50; the first n are used)")
 ap.add_argument("--libero-steplimit", type=int, default=0,
@@ -86,8 +88,12 @@ if a.libero_pro:
     lseeds = parse_seeds(a.libero_seeds)
     if len(lseeds) < a.libero_trials:
         raise SystemExit(f"--libero-trials {a.libero_trials} but only {len(lseeds)} --libero-seeds")
-    for group, names in PRO_NAMES.items():
-        for i, name in enumerate(names):
+    groups = [g for g in a.pro_groups.split(",") if g]
+    bad = [g for g in groups if g not in PRO_NAMES]
+    if bad:
+        raise SystemExit(f"unknown --pro-groups {bad}; choose from {list(PRO_NAMES)}")
+    for group in groups:
+        for i, name in enumerate(PRO_NAMES[group]):
             t = copy.deepcopy(by_id[f"libero_{group}_{i}"])
             t["task_id"] = f"libero_{group}_{name}"
             t["env_kwargs"] = {**t.get("env_kwargs", {}), "suite_name": PRO_SUITE[group]}
@@ -109,4 +115,4 @@ pack = {"pack_id": out.name, "version": "viking-1", "visibility": "public",
 n_rs = len(a.robosuite) * a.robosuite_trials
 n_lb = sum(t["n_trials"] for t in tasks if t["simulator"] == "libero")
 print(f"{out/'pack.yaml'}: robosuite {len(a.robosuite)}x{a.robosuite_trials}={n_rs}, "
-      f"libero {'LIBERO-PRO 30' if a.libero_pro else len(a.libero)}x{a.libero_trials}={n_lb}, seeds {a.seeds or 'random'}{' / libero ' + a.libero_seeds if a.libero_pro else ''}, budget {(n_rs+n_lb)*orig['limits']['trial_time_s']/3600:.1f} h")
+      f"libero {'LIBERO-PRO ' + a.pro_groups if a.libero_pro else len(a.libero)}x{a.libero_trials}={n_lb}, seeds {a.seeds or 'random'}{' / libero ' + a.libero_seeds if a.libero_pro else ''}, budget {(n_rs+n_lb)*orig['limits']['trial_time_s']/3600:.1f} h")
