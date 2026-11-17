@@ -1,0 +1,26 @@
+# CaP-Agent0 with Qwen3.8-27B, and thinking switched off on the server (like evalA's code writer).
+# With the image's default (thinking on, --reasoning-parser qwen3), Qwen3.8's reasoning text came back
+# as the "code" (smoke 2026-11-18: cube_lifting 0/4, every code block was prose), so the server is told
+# not to think. CAPX_SERVE_EXTRA_ARGS replaces the image default, so --attention-backend TRITON_ATTN is
+# repeated; the JSON has no spaces because the entrypoint splits this variable on whitespace.
+team_id: viking-q38nt
+submission_id: q38nt
+weights:
+  - repo: Qwen/Qwen3.8-27B
+    revision: 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
+    path: /models/qwen3.8-27b
+  - repo: facebook/sam3
+    revision: 3c879f39826c281e95690f02c7821c4de09afae7
+    path: /models/sam3
+    gated: true
+  - repo: google/owlv2-large-patch14-ensemble
+    revision: 95e26936e865f87db1742128404b3c035d47d89d
+    path: /models/owlv2-large-patch14-ensemble
+  - repo: facebook/sam2.1-hiera-large
+    revision: 665f8e2ad61cf5f53d65644ff27c8ee525124610
+    path: /models/sam2.1-hiera-large
+env:
+  CAPX_MODEL: Qwen/Qwen3.8-27B
+  CAPX_MODEL_PATH: /models/qwen3.8-27b
+  CAPX_SAM3_CHECKPOINT: /models/sam3/sam3.pt
+  CAPX_SERVE_EXTRA_ARGS: '--attention-backend TRITON_ATTN --default-chat-template-kwargs {"enable_thinking":false}'
