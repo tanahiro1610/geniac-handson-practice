@@ -1,0 +1,28 @@
+# CaP-Agent0 with Qwen3.8-27B, thinking ON at reasoning effort "low".
+# Qwen3.8's chat template defaults to reasoning_effort "xhigh"; with the image's max_tokens 8192 the
+# thinking ran out before </think>, and the qwen3 reasoning parser then returned the unfinished thinking
+# as the answer (smoke 2026-11-18: every code block was prose). The operations baseline collected its
+# data with thinking on at effort "low" (geniac_baseline/collect/settings.py, template.py), so the
+# server's default template kwargs are set to that. CAPX_SERVE_EXTRA_ARGS replaces the image default,
+# so --attention-backend TRITON_ATTN is repeated; no spaces in the JSON (the entrypoint splits on them).
+team_id: viking-q38low
+submission_id: q38low
+weights:
+  - repo: Qwen/Qwen3.8-27B
+    revision: 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
+    path: /models/qwen3.8-27b
+  - repo: facebook/sam3
+    revision: 3c879f39826c281e95690f02c7821c4de09afae7
+    path: /models/sam3
+    gated: true
+  - repo: google/owlv2-large-patch14-ensemble
+    revision: 95e26936e865f87db1742128404b3c035d47d89d
+    path: /models/owlv2-large-patch14-ensemble
+  - repo: facebook/sam2.1-hiera-large
+    revision: 665f8e2ad61cf5f53d65644ff27c8ee525124610
+    path: /models/sam2.1-hiera-large
+env:
+  CAPX_MODEL: Qwen/Qwen3.8-27B
+  CAPX_MODEL_PATH: /models/qwen3.8-27b
+  CAPX_SAM3_CHECKPOINT: /models/sam3/sam3.pt
+  CAPX_SERVE_EXTRA_ARGS: '--attention-backend TRITON_ATTN --default-chat-template-kwargs {"reasoning_effort":"low"}'

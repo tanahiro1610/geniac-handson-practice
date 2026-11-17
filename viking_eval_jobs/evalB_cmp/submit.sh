@@ -8,6 +8,7 @@
 # Put one submission into the comparison queue (downloads its weights first, ~60GB).
 #   reference (Qwen3.6-27B): sbatch --export=ALL,WHO=q36,SUB_ID=cmp-1 submit.sh
 #   Qwen3.8-27B:             sbatch --export=ALL,WHO=q38,SUB_ID=cmp-1 submit.sh
+#   Qwen3.8-27B, thinking at effort low: WHO=q38low
 #   Qwen3.8-27B, no thinking: sbatch --export=ALL,WHO=q38nt,SUB_ID=cmp-1 submit.sh
 #   smoke test:              add CONFIG=$HOME/capx-queue/queue-cmp-smoke.yaml
 set -euo pipefail
@@ -17,8 +18,9 @@ C=~/geniac_prize_2026_code
 case $WHO in
   q36) MANIFEST=$C/singularity/capx-submission-agent0.yaml ;;
   q38) MANIFEST=$HOME/viking-eval/viking_eval_jobs/evalB_cmp/submission-qwen38.yaml ;;
+  q38low) MANIFEST=$HOME/viking-eval/viking_eval_jobs/evalB_cmp/submission-qwen38-low.yaml ;;
   q38nt) MANIFEST=$HOME/viking-eval/viking_eval_jobs/evalB_cmp/submission-qwen38-nothink.yaml ;;
-  *) echo "WHO must be q36, q38 or q38nt"; exit 1 ;;
+  *) echo "WHO must be q36, q38, q38nt or q38low"; exit 1 ;;
 esac
 cd $C
 export CAPX_HF_TOKEN=$(cat ~/.cache/huggingface/token)
