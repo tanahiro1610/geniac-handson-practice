@@ -15,6 +15,9 @@ base = Path.home() / "capx-queue/queue.yaml"
 q = yaml.safe_load(base.read_text()) or {}
 if "master_seed" not in q:
     raise SystemExit(f"{base} has no master_seed: add one (any integer) so both runs share seeds")
+# A queue's workers take any pending job in its root and run it with THEIR config's
+# subsets, so each comparison config gets its own root (<root>-<pack name>).
+q["root"] = str(q.get("root", "~/capx-queue/root")).rstrip("/") + "-" + Path(pack).expanduser().name
 pk = yaml.safe_load((Path(pack).expanduser() / "pack.yaml").read_text())
 present = sorted({t["simulator"] for t in pk["tasks"]}, key=["robosuite", "libero"].index)
 q["subsets"] = [{"name": s, "taskpack": pack, "simulators": [s]} for s in present]
