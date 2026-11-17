@@ -1,4 +1,51 @@
-# 評価B：CaP-Agent0 のモデル比較（Qwen3.6-27B と Qwen3.8-27B）
+# 評価B：CaP-Agent0 のモデル比較・評価Aとの比較
+
+## 今回（2026-11-17）: Robosuite 7タスク × 50試行、seed 401〜450（評価Aと同じ）
+
+評価A（Qwen3.8-27B、seed 401〜450）と同じタスク・seed で、評価B（CaP-Agent0 の参照実装を評価キューで動かす）を回す。
+
+| 本 | モデル | 比べる相手 | 分かること |
+| --- | --- | --- | --- |
+| ① | Qwen3.8-27B（`WHO=q38`） | 評価A（Robosuite 178/350） | 評価の方式の差（思考あり・時間ルールなど） |
+| ② | Qwen3.6-27B（`WHO=q36`、参照実装そのまま） | ① | モデルの差 |
+
+1本 350試行。持ち時間は 350 × 300秒 = 29.2時間（上限）、参照実装の実績から実際は約14時間。GPU は1本に1枚。
+
+```bash
+# 1. パックとキュー設定を作る（/scratch を見るので計算ノードで）
+srun -p part-group_1a6e94 -c 1 --mem=4G -t 00:10:00 bash -c '
+J=~/viking-eval/viking_eval_jobs/evalB_cmp; P=~/capx-venv/bin/python
+$P $J/make_cmp_pack.py ~/capx-queue/pack-rs50 --libero --robosuite-trials 50 --seeds 401-450
+$P $J/make_cmp_pack.py ~/capx-queue/pack-rs50-smoke --robosuite cube_lifting --libero --robosuite-trials 4 --seeds 401-404
+$P $J/make_queue_cmp.py ~/capx-queue/pack-rs50 ~/capx-queue/queue-rs50.yaml
+$P $J/make_queue_cmp.py ~/capx-queue/pack-rs50-smoke ~/capx-queue/queue-rs50-smoke.yaml'
+
+# 2. 試し流し（Qwen3.8、cube_lifting × 4試行）
+sbatch --export=ALL,WHO=q38,SUB_ID=rs50-smoke-1,CONFIG=$HOME/capx-queue/queue-rs50-smoke.yaml ~/viking-eval/viking_eval_jobs/evalB_cmp/submit.sh
+#    submit のジョブが終わったら worker
+cd ~/geniac_prize_2026_code
+env -i PATH="$PATH" HOME="$HOME" LANG="$LANG" CAPX_EVALQ_PYTHON=$HOME/capx-venv/bin/python \
+  sbatch -p part-group_1a6e94 --gres=gpu:1 --cpus-per-task=16 --mem=256G -t 03:00:00 \
+    --job-name=evalB-rs50-smoke --export=ALL scripts/evalq/worker.sbatch \
+    --config ~/capx-queue/queue-rs50-smoke.yaml --max-jobs 1
+
+# 3. 本番（① から。② は ① が終わってから、または班に断ってから同時に）
+sbatch --export=ALL,WHO=q38,SUB_ID=rs50-1,CONFIG=$HOME/capx-queue/queue-rs50.yaml ~/viking-eval/viking_eval_jobs/evalB_cmp/submit.sh
+cd ~/geniac_prize_2026_code
+env -i PATH="$PATH" HOME="$HOME" LANG="$LANG" CAPX_EVALQ_PYTHON=$HOME/capx-venv/bin/python \
+  sbatch -p part-group_1a6e94 --gres=gpu:1 --cpus-per-task=16 --mem=256G -t 32:00:00 \
+    --job-name=evalB-rs50 --export=ALL scripts/evalq/worker.sbatch \
+    --config ~/capx-queue/queue-rs50.yaml --max-jobs 1
+```
+
+試し流しで確かめること:
+- `runs/<run_id>/robosuite/submission-out/logs/vllm.log` に Qwen3.8-27B が立ち上がった記録がある
+- `results/viking-q38__rs50-smoke-1__*.json` の cube_lifting が 4/4 に近い
+- `submission-out/cube_lifting/` の seed 401 の動画の最初の場面が、評価Aの cube_lifting seed 401 の動画と同じ（同じ seed で同じ場面になるかの確認）
+
+---
+
+## 以前の案（モデル比較、ランダム seed・元の LIBERO）
 
 運営の評価キュー（評価B）で、CaP-Agent0 の参照実装のモデルだけを差し替えて比べます。
 イメージ・ランナー・アンサンブル（オン）・知覚は同じで、違うのはモデルだけです。

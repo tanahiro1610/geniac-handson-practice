@@ -15,19 +15,20 @@ base = Path.home() / "capx-queue/queue.yaml"
 q = yaml.safe_load(base.read_text()) or {}
 if "master_seed" not in q:
     raise SystemExit(f"{base} has no master_seed: add one (any integer) so both runs share seeds")
-q["subsets"] = [
-    {"name": "robosuite", "taskpack": pack, "simulators": ["robosuite"]},
-    {"name": "libero", "taskpack": pack, "simulators": ["libero"]},
-]
+pk = yaml.safe_load((Path(pack).expanduser() / "pack.yaml").read_text())
+present = sorted({t["simulator"] for t in pk["tasks"]}, key=["robosuite", "libero"].index)
+q["subsets"] = [{"name": s, "taskpack": pack, "simulators": [s]} for s in present]
 sims = q.get("simulators")
 if sims is None:
     print("note: queue.yaml has no simulators section; the defaults (repo singularity/images) apply")
 else:
-    if "libero" not in sims:
+    if "libero" in present and "libero" not in sims:
         rs = sims["robosuite"]["image"]
         sims["libero"] = {"image": rs.replace("capx-env-robosuite", "capx-env-libero"),
                           "max_lanes": sims["robosuite"].get("max_lanes", 32)}
     for name, s in sims.items():
+        if name not in present:
+            continue
         img = Path(str(s.get("image", ""))).expanduser()
         if s.get("image") and not img.exists():
             print(f"WARNING: {name} image {img} does not exist yet (build it first)")

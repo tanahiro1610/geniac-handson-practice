@@ -1,9 +1,11 @@
 """Write a task pack for comparing two models on evalB (the organizer's eval queue).
 
 Copies the tasks from taskpacks/original, sets how many trials each gets, and drops
-the fixed seeds so the gateway draws them from the queue's master_seed: two runs on
-the same queue config get the same seeds, so the comparison is paired.
+either fixes the seeds (--seeds 401-450: the same seeds evalA used) or drops them so the
+gateway draws them from the queue's master_seed. Either way two runs on the same pack and
+queue config get the same seeds, so the comparison is paired.
 
+  ~/capx-venv/bin/python make_cmp_pack.py ~/capx-queue/pack-rs50 --libero --robosuite-trials 50 --seeds 401-450
   ~/capx-venv/bin/python make_cmp_pack.py ~/capx-queue/pack-cmp
   ~/capx-venv/bin/python make_cmp_pack.py ~/capx-queue/pack-cmp-smoke --robosuite cube_lifting \
       --libero libero_goal_7 --robosuite-trials 2 --libero-trials 2
@@ -25,7 +27,18 @@ ap.add_argument("--robosuite", nargs="*", default=ROBOSUITE)
 ap.add_argument("--libero", nargs="*", default=LIBERO)
 ap.add_argument("--robosuite-trials", type=int, default=20)
 ap.add_argument("--libero-trials", type=int, default=10)
+ap.add_argument("--seeds", default="", help="fixed seeds for every task, e.g. 401-450 (trial i uses the i-th); "
+                "omit for random seeds from the queue's master_seed")
 a = ap.parse_args()
+
+def parse_seeds(s):
+    out = []
+    for part in filter(None, s.split(",")):
+        lo, _, hi = part.partition("-")
+        out += list(range(int(lo), int(hi or lo) + 1))
+    return out
+
+seeds = parse_seeds(a.seeds)
 
 orig = yaml.safe_load(open(a.original))
 by_id = {t["task_id"]: t for t in orig["tasks"]}
@@ -37,7 +50,12 @@ tasks = []
 for tid, n in [(t, a.robosuite_trials) for t in a.robosuite] + [(t, a.libero_trials) for t in a.libero]:
     t = copy.deepcopy(by_id[tid])
     t["n_trials"] = n
-    t.pop("seed_policy", None)  # default: random, derived from the queue's master_seed
+    if seeds:
+        if len(seeds) < n:
+            raise SystemExit(f"{tid}: {n} trials but only {len(seeds)} seeds (they would repeat)")
+        t["seed_policy"] = {"mode": "fixed", "seeds": seeds[:n]}
+    else:
+        t.pop("seed_policy", None)  # default: random, derived from the queue's master_seed
     tasks.append(t)
 
 out = Path(a.out).expanduser()
@@ -48,4 +66,4 @@ pack = {"pack_id": out.name, "version": "viking-1", "visibility": "public",
 n_rs = len(a.robosuite) * a.robosuite_trials
 n_lb = len(a.libero) * a.libero_trials
 print(f"{out/'pack.yaml'}: robosuite {len(a.robosuite)}x{a.robosuite_trials}={n_rs}, "
-      f"libero {len(a.libero)}x{a.libero_trials}={n_lb}, budget {(n_rs+n_lb)*orig['limits']['trial_time_s']/3600:.1f} h")
+      f"libero {len(a.libero)}x{a.libero_trials}={n_lb}, seeds {a.seeds or 'random'}, budget {(n_rs+n_lb)*orig['limits']['trial_time_s']/3600:.1f} h")
