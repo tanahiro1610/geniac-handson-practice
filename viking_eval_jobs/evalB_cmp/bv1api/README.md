@@ -75,3 +75,9 @@ $W --dependency=afterok:$b -t 05:00:00 --job-name=evalB-api-lp scripts/evalq/wor
 本番は前回と同じパック・キューに、新しい SUB_ID で入れる。結果は `viking-bv1api__…` / `viking-bv1apilib__…` という名前になるので、前回の結果とは混ざらない。
 - Robosuite：`queue-rsx` / `queue-rsy` に `WHO=bv1api`
 - LIBERO-PRO：`queue-lpa` / `queue-lpb` に `WHO=bv1apilib`
+
+## bv1best（タスクごとに良い方の API）
+
+同じイメージに、CaP-Agent0 の元の設定を `franka_two_arm_lift_hl.yaml` / `franka_two_arm_handover_hl.yaml` / `franka_libero_hl.yaml` として残している（install.sh が上書きする前にコピー）。
+
+`runner-bv1-best.yaml` は two_arm_lift だけを高レベル API（`FrankaTwoArmLiftApi`）にした runner で、`WHO=bv1best` で使う。どれをどちらにしたかと理由は `../../evalA_best/README.md` にある。

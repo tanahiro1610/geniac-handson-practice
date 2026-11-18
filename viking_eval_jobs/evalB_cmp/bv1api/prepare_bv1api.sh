@@ -22,7 +22,7 @@ fi
 rm -rf "$STAGE"; mkdir -p "$STAGE"
 cp -R "$BL/submission" "$STAGE/submission"
 cp "$BL/patches/geniac_prize/skill-library.patch" "$STAGE/submission/"
-cp "$HERE/runner-baseline-v1-api.yaml" "$STAGE/"
+cp "$HERE/runner-baseline-v1-api.yaml" "$HERE/runner-bv1-best.yaml" "$STAGE/"
 sed "s#@BASE_SIF@#$BASE_SIF#" "$HERE/capx-submission-bv1api.def.in" > "$STAGE/capx-submission-bv1api.def"
 git -C "$BL" rev-parse HEAD > "$STAGE/submission/BASELINE_REV"
 ls -l "$STAGE" "$STAGE/submission"

@@ -5,14 +5,22 @@ From: @BASE_SIF@
 # + the operations baseline's submission overlay (geniac_prize_2026_baseline/submission/install.sh):
 #   skill-library.patch (14 LIBERO skills), trial-state.patch (rulebook 8.4),
 #   env_configs/gateway/*.yaml with evaluation A's APIs and prompts, task_map in runner.yaml.
-# runner-baseline-v1-api.yaml carries the same task_map for CAPX_RUNNER_CONFIG.
+# runner-baseline-v1-api.yaml carries the same task_map for CAPX_RUNNER_CONFIG (all evaluation A APIs).
+# runner-bv1-best.yaml: the better API per task (two_arm_lift: CaP-Agent0's FrankaTwoArmLiftApi = *_hl.yaml).
 
 %files
     submission /opt/baseline-submission
     runner-baseline-v1-api.yaml /workspace/capx/env_configs/gateway/runner-baseline-v1-api.yaml
+    runner-bv1-best.yaml /workspace/capx/env_configs/gateway/runner-bv1-best.yaml
 
 %post
     set -eu
+    # Keep CaP-Agent0's own task configs (the higher-level APIs) under *_hl.yaml before install.sh
+    # overwrites them, so a runner can pick either per task.
+    cd /workspace/capx/env_configs/gateway
+    cp franka_two_arm_lift.yaml franka_two_arm_lift_hl.yaml
+    cp franka_two_arm_handover.yaml franka_two_arm_handover_hl.yaml
+    cp franka_libero.yaml franka_libero_hl.yaml
     bash /opt/baseline-submission/install.sh /workspace/capx
     cd /workspace/capx
     # Fail the build if an API name does not exist in this image's CaP-X.
@@ -25,7 +33,8 @@ for f in sorted(glob.glob("env_configs/gateway/franka_*.yaml")):
     missing = [a for a in apis if a not in known]
     print(f, apis, "MISSING " + str(missing) if missing else "ok")
     assert not missing, f
-print(yaml.safe_load(open("env_configs/gateway/runner-baseline-v1-api.yaml"))["task_map"])
+for r in ("runner-baseline-v1-api.yaml", "runner-bv1-best.yaml"):
+    print(r, yaml.safe_load(open("env_configs/gateway/" + r))["task_map"])
 PY
 
 %runscript

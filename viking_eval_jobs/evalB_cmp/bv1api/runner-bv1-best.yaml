@@ -1,0 +1,74 @@
+# baseline-v1 + タスクごとに良い方の API。2026-11-18 VIKING 評価班
+# runner-baseline-v1-api.yaml との違いは two_arm_lift だけ: CaP-Agent0 の高レベル API（FrankaTwoArmLiftApi、
+# イメージ作成時に元の設定を franka_two_arm_lift_hl.yaml として残したもの）。根拠: 素の評価B 28/50 > 評価A 15/50。
+# 他は評価A の API（spill_wipe 37 vs 0、nut_assembly はヒント入りプロンプト、cube 3種は同じ API）。
+# two_arm_handover（どちらも 0/50）と LIBERO（評価B の API の結果待ち）は評価A の API のまま。
+# runner-baseline-v1.yaml との違いは task_map だけ。geniac_prize_2026_baseline の submission/task_map.yaml と同じ4件。
+# ここに無い cube_lifting/stack/restack と LIBERO は、install.sh が置き換えた
+# franka_robosuite.yaml / franka_libero.yaml に自動で振り分けられる（どちらも評価Aと同じ API）。
+# VIKING Agent比較用ベースライン：baseline-v1（未検証の提案）
+# 作成日: 2026-11-18
+# 基準にした公式コード:
+# https://github.com/matsuolab/geniac_prize_2026_code/tree/1b396f5e625c814497a85af38d4f015068aacbd8
+#
+# 目的: 同じモデルで参照Agentと改良Agentを比較する。
+# 公式の既定設定との差: モデルをQwen3.8-27B、max_tokensを32768に変更。
+# このファイルは上記commitのrunner形式。最新版との互換性は未検証。
+# task_mapの相対パスを解決するため、使用時は同版の
+# env_configs/gateway/ 内に置く。YAML単体では実行環境にならない。
+#
+# 以下は別途設定・確認が必要（コメントなので、このYAMLでは適用されない）:
+# - モデル重み: 学習前Qwen/Qwen3.8-27B。revisionを確定して両者で固定。
+# - adapter: なし。
+# - thinking: コード生成・画像差分ともON。強さとchat templateを確定。
+# - モデル重みの精度: BF16、追加量子化なし。
+#   参照起動処理はadapterなしでFP8を指定するため、起動設定の変更が必要。
+# - 文脈長: CAPX_MAX_MODEL_LEN=65536を暫定使用。
+#   入力履歴と生成量の合計がこの範囲に収まる必要がある。
+# - KVキャッシュ精度、vLLMの版、GPUメモリ配分も固定・記録。
+# - プロンプト・API・スキルを同じ版に固定。baseline overlayの有無も記録。
+# - 起動処理がmodel/server_urlを上書きするため、実効設定を確認。
+# - B300 1枚でメモリ・所要時間・打ち切り・文脈長超過を予備評価。
+# - 評価対象、seed/初期配置、試行数、時間・step上限は評価側で揃える。
+# - 評価班の既存評価Bとは別の設定版として記録する。
+#
+# 複数ターンと終了判断は参照Agentのコード・タスク別設定に従う。
+# 正解の成功判定をAgentへ渡さず、観測・実行ログから判断する。
+
+gateway_host: gateway
+gateway_port: 8000
+
+model: Qwen/Qwen3.8-27B
+server_url: http://127.0.0.1:8110/v1/chat/completions
+
+# 単発呼び出しの温度。
+# アンサンブル候補0.1〜0.9・統合0.2は参照コード側の定義を使う。
+temperature: 0.0
+# 1回の生成上限。1試行全体の上限ではない。
+max_tokens: 32768
+
+# 同時に進める試行数。CPUの要求コア数ではない。
+concurrency: 16
+simulator_lanes:
+  behavior: 8
+
+output_dir: outputs/gateway_submission
+
+use_visual_feedback: true
+use_img_differencing: true
+use_video_differencing: false
+use_wrist_camera: false
+
+# 9候補を生成し、1回の統合で実行する回答を作る。
+use_parallel_ensemble: true
+
+# 列挙されていないタスクは参照runnerの選択処理に従う。
+task_map:
+  - task_id: nut_assembly
+    config: franka_nut_assembly.yaml
+  - task_id: spill_wipe
+    config: franka_spill_wipe.yaml
+  - task_id: two_arm_lift
+    config: franka_two_arm_lift_hl.yaml
+  - task_id: two_arm_handover
+    config: franka_two_arm_handover.yaml
