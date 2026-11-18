@@ -21,11 +21,13 @@ case $WHO in
        IMG=/scratch/$USER/capx-queue/images/capx-submission-bv1.sif ;;
   bv1low) MANIFEST=$HOME/viking-eval/viking_eval_jobs/evalB_cmp/bv1/submission-bv1-low.yaml
        IMG=/scratch/$USER/capx-queue/images/capx-submission-bv1.sif ;;
+  bv1lowlc) MANIFEST=$HOME/viking-eval/viking_eval_jobs/evalB_cmp/bv1/submission-bv1-low-ctx131k.yaml
+       IMG=/scratch/$USER/capx-queue/images/capx-submission-bv1.sif ;;
   q36) MANIFEST=$C/singularity/capx-submission-agent0.yaml ;;
   q38) MANIFEST=$HOME/viking-eval/viking_eval_jobs/evalB_cmp/submission-qwen38.yaml ;;
   q38low) MANIFEST=$HOME/viking-eval/viking_eval_jobs/evalB_cmp/submission-qwen38-low.yaml ;;
   q38nt) MANIFEST=$HOME/viking-eval/viking_eval_jobs/evalB_cmp/submission-qwen38-nothink.yaml ;;
-  *) echo "WHO must be bv1, bv1low, q36, q38, q38nt or q38low"; exit 1 ;;
+  *) echo "WHO must be bv1, bv1low, bv1lowlc, q36, q38, q38nt or q38low"; exit 1 ;;
 esac
 cd $C
 export CAPX_HF_TOKEN=$(cat ~/.cache/huggingface/token)
