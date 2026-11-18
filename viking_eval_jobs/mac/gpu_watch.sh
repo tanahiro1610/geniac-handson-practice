@@ -10,6 +10,7 @@ INTERVAL=${INTERVAL:-30}
 HOST=${HOST:-gmo}
 PART=${PART:-part-group_1a6e94}
 TEAM_GPUS=${TEAM_GPUS:-4}
+TEAM_CPUS=${TEAM_CPUS:-64}
 OUT=${OUT:-$HOME/gpu_status.html}
 HIST=${HIST:-$HOME/.gpu_watch_history}
 NAMES=${NAMES:-$HOME/.gpu_watch_names}
@@ -47,6 +48,8 @@ h1{font-family:var(--m);font-weight:900;font-size:60px;margin:4px 0;color:#fff;t
 .hx1{fill:none;stroke:var(--o);stroke-width:12;filter:drop-shadow(0 0 6px var(--o))}.hx1.full{stroke:var(--r);filter:drop-shadow(0 0 8px var(--r))}
 .big{font-family:var(--d);font-size:88px;fill:#fff;text-anchor:middle;font-weight:700}.of{font-size:42px;fill:var(--o)}.lab{font-family:var(--d);fill:var(--o);text-anchor:middle;font-size:20px;letter-spacing:.2em}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--dim);margin:12px;border:1px solid var(--dim)}.stats div{background:#0a0602;text-align:center;padding:6px 2px}.stats b{display:block;font-size:32px;color:var(--o);font-weight:700}.stats span{font-size:11px;letter-spacing:.1em;color:var(--sub);font-family:var(--s)}
+.cpu{margin:0 12px 12px;border:1px solid var(--dim);padding:8px 10px;background:#0a0602}.cl{display:flex;align-items:baseline;gap:8px}.cl span{font-family:var(--m);font-weight:900;font-size:13px;color:var(--txt)}.cl b{font-size:28px;color:var(--o);font-weight:700;margin-left:auto}.cl b small{font-size:16px;color:var(--sub)}.cl em{font-style:normal;font-size:20px;color:var(--o);min-width:52px;text-align:right}.cpu.hot .cl b,.cpu.hot .cl em{color:var(--r)}
+.cells{display:grid;grid-template-columns:repeat(16,1fr);gap:2px;margin-top:6px}.cells i{height:9px;background:#2a1a08}.cells i.on{background:var(--o);box-shadow:0 0 4px var(--o)}.cells i.me{background:var(--g);box-shadow:0 0 4px var(--g)}.cpu.hot .cells i.on{background:var(--r);box-shadow:0 0 4px var(--r)}
 .slots{display:grid;gap:12px;padding:12px}
 .slot{--bc:var(--o);--cut:polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,22px 100%,0 calc(100% - 22px));clip-path:var(--cut);background:var(--bc);padding:2px;min-height:230px}
 .slot .in{clip-path:var(--cut);height:100%;padding:12px 14px 14px;display:flex;flex-direction:column;gap:3px;background:linear-gradient(170deg,color-mix(in srgb,var(--bc) 22%,transparent),transparent 62%),#070401}
@@ -84,7 +87,7 @@ render() {
   epoch=$(date +%s)
   # Multi-line text (CSS, JS, ssh errors) goes through the environment: macOS awk rejects newlines in -v.
   echo "$data" | ECSS="$EVA_CSS" EJS="$EVA_JS" GW_ERR="$err" awk -F'|' -v me="$ME" -v total="$TEAM_GPUS" -v now="$now" -v epoch="$epoch" \
-      -v interval="$INTERVAL" -v part="$PART" -v hist="$HIST" -v names="$NAMES" -v taskf="$TASKF" -v theme="$THEME" '
+      -v interval="$INTERVAL" -v part="$PART" -v hist="$HIST" -v names="$NAMES" -v taskf="$TASKF" -v theme="$THEME" -v tcpu="$TEAM_CPUS" '
     function e(s){ gsub(/&/,"\\&amp;",s); gsub(/</,"\\&lt;",s); gsub(/>/,"\\&gt;",s); return s }
     function gpus(s,  n){ if (s !~ /gpu/) return 0; n=s; sub(/.*gpu[^0-9]*/,"",n); n+=0; return (n>0?n:1) }
     function secs(t,  d,p,a,n){ if (t !~ /^[0-9]/) return 0; d=0
@@ -99,7 +102,7 @@ render() {
       else if (r ~ /Dependency/) c="#8b5cf6"; else if (r ~ /ArrayTaskLimit/) c="#06b6d4"; else if (r ~ /Priority|Resources/) c="#3b82f6"
       return "<span class=\"chip\" style=\"--c:" c "\">" e(r) "</span>" }
     function hms(s){ if (s<0) s=0; return sprintf("%02d:%02d:%02d", int(s/3600), int((s%3600)/60), s%60) }
-    function eva(   pct,i,j,s,lim,frac,title,sub2,cls,n0,cnt,W,H,pts,area,x,y,px,k,mins){
+    function eva(   cp,pct,i,j,s,lim,frac,title,sub2,cls,n0,cnt,W,H,pts,area,x,y,px,k,mins){
       pct=(total>0? used/total : 0); if (pct>1) pct=1
       print "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
       print "<meta http-equiv=\"refresh\" content=\"" interval+15 "\"><title>GPU " used+0 "/" total " · VIKING</title><style>" ecss "</style></head><body>"
@@ -109,11 +112,16 @@ render() {
       if (err!="") print "<div class=\"alert red\"><b class=\"blink\">通信途絶</b><span>CONNECTION LOST — " e(err) "</span></div>"
       else if (free==0) print "<div class=\"alert red\"><b class=\"blink\">空きGPUなし</b><span>ALL UNITS ENGAGED — " np+0 " JOB(S) WAITING</span></div>"
       else printf "<div class=\"alert ok\"><b>空き %d 基</b><span>%d UNIT(S) STANDING BY</span></div>\n", free, free
-      print "<div class=\"grid\"><div class=\"panel core\"><div class=\"ph\">■ 稼働率<i>Operation rate</i></div>"
+      print "<div class=\"grid\"><div class=\"panel core\"><div class=\"ph\">■ GPU・CPU 稼働率<i>Operation rate</i></div>"
       printf "<svg viewBox=\"0 0 200 200\"><polygon points=\"100,10 180,56 180,144 100,190 20,144 20,56\" class=\"hx0\"/>"
       printf "<polygon points=\"100,10 180,56 180,144 100,190 20,144 20,56\" class=\"hx1%s\" style=\"stroke-dasharray:%.1f 600\"/>", (pct>=1?" full":""), 553*pct
       printf "<text x=\"100\" y=\"122\" class=\"big\">%d<tspan class=\"of\">/%d</tspan></text><text x=\"100\" y=\"150\" class=\"lab\">%d%%</text></svg>", used, total, pct*100
-      printf "<div class=\"stats\"><div><b>%d</b><span>空き</span></div><div><b>%d</b><span>稼働中</span></div><div><b>%d</b><span>待機中</span></div></div></div>\n", free, nr, np
+      printf "<div class=\"stats\"><div><b>%d</b><span>空き</span></div><div><b>%d</b><span>稼働中</span></div><div><b>%d</b><span>待機中</span></div></div>\n", free, nr, np
+      cp=(tcpu>0? cu/tcpu : 0)
+      printf "<div class=\"cpu%s\"><div class=\"cl\"><span>CPU コア</span><b>%d<small>/%d</small></b><em>%d%%</em></div><div class=\"cells\">", (cp>=.9?" hot":""), cu, tcpu, cp*100
+      k=0; for (i=1;i<=nr;i++) for (j=1;j<=R_c[i]+0 && k<tcpu;j++) { k++; printf "<i class=\"%s\"></i>", (R_u[i]==me?"me":"on") }
+      while (k<tcpu) { k++; printf "<i></i>" }
+      printf "</div><div class=\"meta\"><span>自分 %d コア</span><span>空き %d コア</span></div></div></div>\n", cme, (tcpu-cu>0? tcpu-cu : 0)
       printf "<div class=\"panel\"><div class=\"ph\">■ 演算ユニット<i>GPU units</i></div><div class=\"slots\" style=\"grid-template-columns:repeat(%d,1fr)\">\n", total
       s=0
       for (i=1;i<=nr;i++) for (j=1;j<=R_g[i] && s<total;j++) { s++
@@ -160,6 +168,7 @@ render() {
         nr++; R_id[nr]=$1; R_u[nr]=$2; R_n[nr]=$3; R_g[nr]=g; R_t[nr]=secs($5); R_l[nr]=secs($10); R_c[nr]=$7; R_m[nr]=$8
         R_task[nr]=(($11 in TK) ? TK[$11] : "")
         used+=g; if ($2==me) mine+=g
+        cu+=$7; if ($2==me) cme+=$7
       } else { np++; P_id[np]=$1; P_u[np]=$2; P_n[np]=$3; P_g[np]=g; P_r[np]=$9; P_c[np]=$7; P_m[np]=$8 }
     }
     END {
@@ -192,7 +201,7 @@ render() {
       print "<div class=\"grid\"><div class=\"card gauge\"><svg viewBox=\"0 0 180 180\"><circle cx=\"90\" cy=\"90\" r=\"70\" fill=\"none\" stroke=\"#1b2540\" stroke-width=\"14\"/>"
       printf "<circle cx=\"90\" cy=\"90\" r=\"70\" fill=\"none\" stroke=\"%s\" stroke-width=\"14\" stroke-linecap=\"round\" stroke-dasharray=\"%.1f %.1f\" transform=\"rotate(-90 90 90)\"/>", col, C*pct, C
       printf "<text x=\"90\" y=\"98\" text-anchor=\"middle\" fill=\"#e6ebf5\" font-size=\"44\" font-weight=\"800\">%d/%d</text><text x=\"90\" y=\"122\" text-anchor=\"middle\" class=\"lab\">GPU 使用中</text></svg>\n", used, total
-      printf "<div class=\"stats\"><div class=\"stat\"><b>%d</b><span>空き GPU</span></div><div class=\"stat\"><b>%d</b><span>走っている</span></div><div class=\"stat\"><b>%d</b><span>待っている</span></div></div></div>\n", free, nr, np
+      printf "<div class=\"stats\"><div class=\"stat\"><b>%d</b><span>空き GPU</span></div><div class=\"stat\"><b>%d</b><span>走っている</span></div><div class=\"stat\"><b>%d</b><span>待っている</span></div></div><div class=\"stats\"><div class=\"stat\"><b>%d/%d</b><span>CPU コア（%d%%）</span></div></div></div>\n", free, nr, np, cu, tcpu, (tcpu>0? cu*100/tcpu : 0)
       print "<div class=\"card\"><h2>GPU スロット</h2><div class=\"slots\">"
       s=0
       for (i=1;i<=nr;i++) for (j=1;j<=R_g[i] && s<total;j++) { s++
