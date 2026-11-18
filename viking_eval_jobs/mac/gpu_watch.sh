@@ -82,9 +82,9 @@ JS
 render() {
   local data="$1" now="$2" err="$3" epoch
   epoch=$(date +%s)
-  echo "$data" | awk -F'|' -v me="$ME" -v total="$TEAM_GPUS" -v now="$now" -v epoch="$epoch" \
-      -v interval="$INTERVAL" -v part="$PART" -v err="$err" -v hist="$HIST" -v names="$NAMES" -v taskf="$TASKF" \
-      -v theme="$THEME" -v ecss="$EVA_CSS" -v ejs="$EVA_JS" '
+  # Multi-line text (CSS, JS, ssh errors) goes through the environment: macOS awk rejects newlines in -v.
+  echo "$data" | ECSS="$EVA_CSS" EJS="$EVA_JS" GW_ERR="$err" awk -F'|' -v me="$ME" -v total="$TEAM_GPUS" -v now="$now" -v epoch="$epoch" \
+      -v interval="$INTERVAL" -v part="$PART" -v hist="$HIST" -v names="$NAMES" -v taskf="$TASKF" -v theme="$THEME" '
     function e(s){ gsub(/&/,"\\&amp;",s); gsub(/</,"\\&lt;",s); gsub(/>/,"\\&gt;",s); return s }
     function gpus(s,  n){ if (s !~ /gpu/) return 0; n=s; sub(/.*gpu[^0-9]*/,"",n); n+=0; return (n>0?n:1) }
     function secs(t,  d,p,a,n){ if (t !~ /^[0-9]/) return 0; d=0
@@ -150,7 +150,8 @@ render() {
       print "<div class=\"foot\">枠の色：<b style=\"color:#ff8a00\">橙</b> = 稼働中　<b style=\"color:#3dff6e\">緑</b> = 自分のジョブ　<b style=\"color:#ff2a1a\">赤</b> = 上限時間の 85% を超えた（点滅）<br>理由の色：<span class=\"chip\" style=\"--c:#f59e0b\">GPU 上限</span> <span class=\"chip\" style=\"--c:#f97316\">CPU 上限</span> <span class=\"chip\" style=\"--c:#ef4444\">メモリ上限</span> <span class=\"chip\" style=\"--c:#8b5cf6\">前のジョブ待ち</span> <span class=\"chip\" style=\"--c:#06b6d4\">配列の同時実行数</span></div>"
       print "</div><div class=\"tape\"></div><script>let s=" interval ";" ejs "</script></body></html>"
     }
-    BEGIN { while ((getline line < names) > 0) { split(line,a," "); if (a[1]!="") { sub(/^[^ ]+ +/,"",line); alias[a[1]]=line } }
+    BEGIN { ecss=ENVIRON["ECSS"]; ejs=ENVIRON["EJS"]; err=ENVIRON["GW_ERR"]
+            while ((getline line < names) > 0) { split(line,a," "); if (a[1]!="") { sub(/^[^ ]+ +/,"",line); alias[a[1]]=line } }
             while ((getline line < taskf) > 0) { split(line,a,"|"); if (a[1]!="") TK[a[1]]=a[2] } }
     NF>=9 {
       for (k=1;k<=NF;k++) gsub(/^ +| +$/,"",$k)
