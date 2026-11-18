@@ -1,0 +1,35 @@
+Bootstrap: localimage
+From: @BASE_SIF@
+
+# capx-submission-bv1.sif (BF16-capable entrypoint, runner-baseline-v1.yaml)
+# + the operations baseline's submission overlay (geniac_prize_2026_baseline/submission/install.sh):
+#   skill-library.patch (14 LIBERO skills), trial-state.patch (rulebook 8.4),
+#   env_configs/gateway/*.yaml with evaluation A's APIs and prompts, task_map in runner.yaml.
+# runner-baseline-v1-api.yaml carries the same task_map for CAPX_RUNNER_CONFIG.
+
+%files
+    submission /opt/baseline-submission
+    runner-baseline-v1-api.yaml /workspace/capx/env_configs/gateway/runner-baseline-v1-api.yaml
+
+%post
+    set -eu
+    bash /opt/baseline-submission/install.sh /workspace/capx
+    cd /workspace/capx
+    # Fail the build if an API name does not exist in this image's CaP-X.
+    python - <<'PY'
+import glob, yaml
+from capx.integrations import list_apis
+known = set(list_apis())
+for f in sorted(glob.glob("env_configs/gateway/franka_*.yaml")):
+    apis = yaml.safe_load(open(f))["apis"]
+    missing = [a for a in apis if a not in known]
+    print(f, apis, "MISSING " + str(missing) if missing else "ok")
+    assert not missing, f
+print(yaml.safe_load(open("env_configs/gateway/runner-baseline-v1-api.yaml"))["task_map"])
+PY
+
+%runscript
+    exec /workspace/capx/entrypoint.sh "$@"
+
+%labels
+    capx.role submission-bv1api

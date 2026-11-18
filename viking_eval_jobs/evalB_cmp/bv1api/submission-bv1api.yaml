@@ -1,0 +1,30 @@
+# bv1api: baseline-v1 (bv1lowlc と同じ: BF16, max_tokens 32768, 文脈 131072, 思考 low) に
+# 運営ベースラインの API・スキル・プロンプトを載せたもの（評価Aと同じ API）。image: capx-submission-bv1api.sif
+# 評価Aとの残りの差: 時間の決め方（ジョブ全体の予算 vs 1試行2400秒）、画像差分の担当（同じモデル vs 別サーバの思考あり）、
+# Robosuite の Molmo2（評価Aは補助で使う）。
+# Robosuite 用（9候補＋統合のアンサンブルあり＝評価Aの Robosuite と同じ）
+team_id: viking-bv1api
+submission_id: bv1api
+weights:
+  - repo: Qwen/Qwen3.8-27B
+    revision: 1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0
+    path: /models/qwen3.8-27b
+  - repo: facebook/sam3
+    revision: 3c879f39826c281e95690f02c7821c4de09afae7
+    path: /models/sam3
+    gated: true
+  - repo: google/owlv2-large-patch14-ensemble
+    revision: 95e26936e865f87db1742128404b3c035d47d89d
+    path: /models/owlv2-large-patch14-ensemble
+  - repo: facebook/sam2.1-hiera-large
+    revision: 665f8e2ad61cf5f53d65644ff27c8ee525124610
+    path: /models/sam2.1-hiera-large
+env:
+  CAPX_MODEL: Qwen/Qwen3.8-27B
+  CAPX_MODEL_PATH: /models/qwen3.8-27b
+  CAPX_SAM3_CHECKPOINT: /models/sam3/sam3.pt
+  CAPX_RUNNER_CONFIG: env_configs/gateway/runner-baseline-v1-api.yaml
+  CAPX_QUANTIZATION: none
+  CAPX_KV_CACHE_DTYPE: auto
+  CAPX_MAX_MODEL_LEN: "131072"
+  CAPX_SERVE_EXTRA_ARGS: '--attention-backend TRITON_ATTN --default-chat-template-kwargs {"reasoning_effort":"low"}'
