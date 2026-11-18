@@ -73,6 +73,18 @@ table{width:100%;border-collapse:collapse;font-size:13px;font-family:var(--s)}th
 .empty{padding:16px 4px;color:#7a5a30;letter-spacing:.16em}
 .foot{margin-top:14px;font-size:12px;color:var(--sub);font-family:var(--s);line-height:2}
 @media(max-width:900px){.grid,.two{grid-template-columns:1fr}.slots{grid-template-columns:repeat(2,1fr)!important}h1{font-size:44px}}
+.grid{grid-template-columns:360px 1fr}
+.gauges{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:10px 10px 0}.hg svg{width:100%;display:block;margin:0}
+.hg .lab{font-size:19px}.hg .big{font-size:80px}.hg .big.sm{font-size:62px}
+.cpu{margin:8px 12px 0}.cl em{font-size:12px;color:var(--sub);font-family:var(--s);min-width:0}.cells i.co{background:#b48cff;box-shadow:0 0 4px #b48cff}
+.sw{display:inline-block;width:9px;height:9px;margin:0 4px 0 6px;vertical-align:-1px;background:#2a1a08}.sw.on{background:var(--o)}.sw.co{background:#b48cff}.sw.me{background:var(--g)}
+.stats{grid-template-columns:repeat(4,1fr)}.stats b{font-size:28px}
+.lbl{display:flex;align-items:baseline;gap:12px;margin:12px 12px 0;padding-bottom:4px;border-bottom:1px dashed var(--dim)}.lbl b{font-family:var(--m);font-weight:900;font-size:15px;color:var(--o)}.lbl span{font-size:14px;letter-spacing:.12em;color:var(--sub)}.lbl.co b{color:#b48cff}
+.minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;padding:12px}
+.slot.mini{--bc:#b48cff;--cut:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px));min-height:0}.slot.mini.me{--bc:var(--g)}.slot.mini.warn{--bc:var(--r)}
+.slot.mini .in{padding:8px 12px 10px}.slot.mini .name{font-size:17px}.slot.mini .tl b{font-size:28px}.slot.mini .top{font-size:14px}
+.empty{padding:12px 16px}
+@media(max-width:1000px){.grid,.two{grid-template-columns:1fr}.slots{grid-template-columns:repeat(2,1fr)!important}}
 CSS
 )
 EVA_JS=$(cat <<'JS'
@@ -102,60 +114,71 @@ render() {
       else if (r ~ /Dependency/) c="#8b5cf6"; else if (r ~ /ArrayTaskLimit/) c="#06b6d4"; else if (r ~ /Priority|Resources/) c="#3b82f6"
       return "<span class=\"chip\" style=\"--c:" c "\">" e(r) "</span>" }
     function hms(s){ if (s<0) s=0; return sprintf("%02d:%02d:%02d", int(s/3600), int((s%3600)/60), s%60) }
-    function eva(   cp,pct,i,j,s,lim,frac,title,sub2,cls,n0,cnt,W,H,pts,area,x,y,px,k,mins){
-      pct=(total>0? used/total : 0); if (pct>1) pct=1
+    function hexg(v,tot,lab,   p,c){
+      p=(tot>0? v/tot : 0); if (p>1) p=1; c=(p>=.9?" full":"")
+      printf "<div class=\"hg\"><svg viewBox=\"0 0 200 200\"><polygon points=\"100,10 180,56 180,144 100,190 20,144 20,56\" class=\"hx0\"/>"
+      printf "<polygon points=\"100,10 180,56 180,144 100,190 20,144 20,56\" class=\"hx1%s\" style=\"stroke-dasharray:%.1f 600\"/>", c, 553*p
+      printf "<text x=\"100\" y=\"60\" class=\"lab\">%s %d%%</text><text x=\"100\" y=\"124\" class=\"big%s\">%d</text><text x=\"100\" y=\"154\" class=\"lab\">/ %d</text></svg></div>", lab, p*100, (length(v "")>2?" sm":""), v, tot
+    }
+    function card(i,cls,label,   lim,frac,title,sub2){
+      lim=R_l[i]; frac=(lim>0? R_t[i]/lim : 0); if (frac>1) frac=1
+      title=(R_task[i]!="" ? R_task[i] : R_n[i]); sub2=(R_task[i]!="" ? who(R_u[i]) " · " R_n[i] : who(R_u[i]))
+      cls=cls (R_u[i]==me?" me":"") (frac>.85?" warn":"")
+      printf "<div class=\"%s\"><div class=\"in\"><div class=\"top\"><span>%s</span><span class=\"st\">稼働中</span></div>", cls, label
+      printf "<div class=\"jid\">JOB #%s</div><div class=\"name\">%s</div><div class=\"user\"><i class=\"u\" style=\"--h:%d\"></i>%s</div>", e(R_id[i]), e(title), hue(R_u[i]), e(sub2)
+      if (lim>0) printf "<div class=\"tl\"><span>残り時間</span><b data-rem=\"%d\">%s</b></div>", lim-R_t[i], hms(lim-R_t[i])
+      else printf "<div class=\"tl\"><span>経過時間</span><b data-rem=\"%d\" data-up=\"1\">%s</b></div>", R_t[i], hms(R_t[i])
+      printf "<div class=\"seg\"><i style=\"width:%d%%\"></i></div><div class=\"meta\"><span>%s コア · %s</span><span>%s</span></div></div></div>\n", frac*100, R_c[i], e(R_m[i]), (lim>0? "上限 " hm(lim) : "")
+    }
+    function eva(   i,j,s,n0,cnt,W,H,pts,cpts,x,y,py,k,mins,nc,cc,cfree){
+      cfree=(tcpu-cu>0? tcpu-cu : 0)
       print "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
-      print "<meta http-equiv=\"refresh\" content=\"" interval+15 "\"><title>GPU " used+0 "/" total " · VIKING</title><style>" ecss "</style></head><body>"
+      print "<meta http-equiv=\"refresh\" content=\"" interval+15 "\"><title>GPU " used+0 "/" total " CPU " cu+0 "/" tcpu " · VIKING</title><style>" ecss "</style></head><body>"
       print "<div class=\"tape\"></div><div class=\"wrap\">"
-      print "<header><div><div class=\"en\">Team VIKING // Compute node status // " e(part) "</div><h1>GPU稼働状況</h1><div class=\"en\">Operator: " e(who(me)) "</div></div>"
+      print "<header><div><div class=\"en\">Team VIKING // Compute node status // " e(part) "</div><h1>計算資源稼働状況</h1><div class=\"en\">Operator: " e(who(me)) "</div></div>"
       print "<div class=\"clock\"><div class=\"en\">Last sync</div><b>" now "</b><div class=\"en\">Next sync <span id=\"cd\">" interval "</span> sec</div></div></header>"
       if (err!="") print "<div class=\"alert red\"><b class=\"blink\">通信途絶</b><span>CONNECTION LOST — " e(err) "</span></div>"
-      else if (free==0) print "<div class=\"alert red\"><b class=\"blink\">空きGPUなし</b><span>ALL UNITS ENGAGED — " np+0 " JOB(S) WAITING</span></div>"
-      else printf "<div class=\"alert ok\"><b>空き %d 基</b><span>%d UNIT(S) STANDING BY</span></div>\n", free, free
-      print "<div class=\"grid\"><div class=\"panel core\"><div class=\"ph\">■ GPU・CPU 稼働率<i>Operation rate</i></div>"
-      printf "<svg viewBox=\"0 0 200 200\"><polygon points=\"100,10 180,56 180,144 100,190 20,144 20,56\" class=\"hx0\"/>"
-      printf "<polygon points=\"100,10 180,56 180,144 100,190 20,144 20,56\" class=\"hx1%s\" style=\"stroke-dasharray:%.1f 600\"/>", (pct>=1?" full":""), 553*pct
-      printf "<text x=\"100\" y=\"122\" class=\"big\">%d<tspan class=\"of\">/%d</tspan></text><text x=\"100\" y=\"150\" class=\"lab\">%d%%</text></svg>", used, total, pct*100
-      printf "<div class=\"stats\"><div><b>%d</b><span>空き</span></div><div><b>%d</b><span>稼働中</span></div><div><b>%d</b><span>待機中</span></div></div>\n", free, nr, np
-      cp=(tcpu>0? cu/tcpu : 0)
-      printf "<div class=\"cpu%s\"><div class=\"cl\"><span>CPU コア</span><b>%d<small>/%d</small></b><em>%d%%</em></div><div class=\"cells\">", (cp>=.9?" hot":""), cu, tcpu, cp*100
-      k=0; for (i=1;i<=nr;i++) for (j=1;j<=R_c[i]+0 && k<tcpu;j++) { k++; printf "<i class=\"%s\"></i>", (R_u[i]==me?"me":"on") }
+      else if (free==0) printf "<div class=\"alert red\"><b class=\"blink\">空きGPUなし</b><span>ALL GPU UNITS ENGAGED — %d JOB(S) WAITING · CPU %d CORES FREE</span></div>\n", np, cfree
+      else printf "<div class=\"alert ok\"><b>空き GPU %d 基 ・ CPU %d コア</b><span>STANDING BY</span></div>\n", free, cfree
+      # ---- row 1: resources | running jobs
+      print "<div class=\"grid\"><div class=\"panel res\"><div class=\"ph\">■ 資源<i>Resources</i></div><div class=\"gauges\">"
+      hexg(used+0, total, "GPU"); hexg(cu+0, tcpu, "CPU")
+      printf "</div><div class=\"cpu%s\"><div class=\"cl\"><span>CPU コア割り当て</span><em>1 マス = 1 コア</em></div><div class=\"cells\">", (tcpu>0 && cu/tcpu>=.9?" hot":"")
+      k=0; for (i=1;i<=nr;i++) for (j=1;j<=R_c[i]+0 && k<tcpu;j++) { k++; printf "<i class=\"%s\"></i>", (R_u[i]==me?"me":(R_g[i]==0?"co":"on")) }
       while (k<tcpu) { k++; printf "<i></i>" }
-      printf "</div><div class=\"meta\"><span>自分 %d コア</span><span>空き %d コア</span></div></div></div>\n", cme, (tcpu-cu>0? tcpu-cu : 0)
-      printf "<div class=\"panel\"><div class=\"ph\">■ 演算ユニット<i>GPU units</i></div><div class=\"slots\" style=\"grid-template-columns:repeat(%d,1fr)\">\n", total
+      printf "</div><div class=\"meta\"><span><i class=\"sw on\"></i>GPU ジョブ <i class=\"sw co\"></i>CPU のみ <i class=\"sw me\"></i>自分</span><span>自分 %d コア</span></div></div>\n", cme
+      printf "<div class=\"stats\"><div><b>%d</b><span>空き GPU</span></div><div><b>%d</b><span>空き CPU</span></div><div><b>%d</b><span>実行中</span></div><div><b>%d</b><span>待ち</span></div></div></div>\n", free, cfree, nr, np
+      print "<div class=\"panel\"><div class=\"ph\">■ 稼働中のジョブ<i>Running</i></div>"
+      printf "<div class=\"lbl\"><b>GPU ユニット</b><span>%d / %d 基使用</span></div><div class=\"slots\" style=\"grid-template-columns:repeat(%d,1fr)\">\n", used, total, total
       s=0
-      for (i=1;i<=nr;i++) for (j=1;j<=R_g[i] && s<total;j++) { s++
-        lim=R_l[i]; frac=(lim>0? R_t[i]/lim : 0); if (frac>1) frac=1
-        title=(R_task[i]!="" ? R_task[i] : R_n[i]); sub2=(R_task[i]!="" ? who(R_u[i]) " · " R_n[i] : who(R_u[i]))
-        cls="slot busy" (R_u[i]==me?" me":"") (frac>.85?" warn":"")
-        printf "<div class=\"%s\"><div class=\"in\"><div class=\"top\"><span>GPU-%02d</span><span class=\"st\">稼働中</span></div>", cls, s
-        printf "<div class=\"jid\">JOB #%s</div><div class=\"name\">%s</div><div class=\"user\"><i class=\"u\" style=\"--h:%d\"></i>%s</div>", e(R_id[i]), e(title), hue(R_u[i]), e(sub2)
-        if (lim>0) printf "<div class=\"tl\"><span>残り時間</span><b data-rem=\"%d\">%s</b></div>", lim-R_t[i], hms(lim-R_t[i])
-        else printf "<div class=\"tl\"><span>経過時間</span><b data-rem=\"%d\" data-up=\"1\">%s</b></div>", R_t[i], hms(R_t[i])
-        printf "<div class=\"seg\"><i style=\"width:%d%%\"></i></div><div class=\"meta\"><span>%s コア · %s</span><span>%s</span></div></div></div>\n", frac*100, R_c[i], e(R_m[i]), (lim>0? "上限 " hm(lim) : "")
-      }
+      for (i=1;i<=nr;i++) for (j=1;j<=R_g[i] && s<total;j++) { s++; card(i, "slot busy", sprintf("GPU-%02d", s)) }
       while (s<total) { s++; printf "<div class=\"slot free\"><div class=\"in\"><div class=\"top\"><span>GPU-%02d</span><span class=\"st\">待機</span></div><div class=\"idle\">STANDBY</div><div class=\"meta\"><span>いつでも使えます</span></div></div></div>\n", s }
-      print "</div></div></div>"
+      print "</div>"
+      nc=0; cc=0; for (i=1;i<=nr;i++) if (R_g[i]==0) { nc++; cc+=R_c[i] }
+      printf "<div class=\"lbl co\"><b>CPU のみ</b><span>%d 件 · %d コア</span></div>", nc, cc
+      if (nc) { print "<div class=\"minis\">"; for (i=1;i<=nr;i++) if (R_g[i]==0) card(i, "slot mini", "CPU ONLY"); print "</div>" }
+      else print "<div class=\"empty\">NO CPU-ONLY JOBS — なし</div>"
+      print "</div></div>"
+      # ---- row 2: history | pending
       print "<div class=\"two\"><div class=\"panel\"><div class=\"ph\">■ 稼働履歴<i>Load history</i></div><div class=\"pb\">"
       n0=(nh>240? nh-239 : 1); cnt=nh-n0+1
       if (cnt>=2) {
-        W=600; H=120; pts=""; px=0
-        for (i=n0;i<=nh;i++) { x=(i-n0)*W/(cnt-1); y=H-6-(HU[i]/total)*(H-12); if (i>n0) pts=pts sprintf("%.1f,%.1f ",x,py); pts=pts sprintf("%.1f,%.1f ",x,y); py=y }
+        W=600; H=130; pts=""; cpts=""
+        for (i=n0;i<=nh;i++) { x=(i-n0)*W/(cnt-1); y=H-6-(HU[i]/total)*(H-12); if (i>n0) pts=pts sprintf("%.1f,%.1f ",x,py); pts=pts sprintf("%.1f,%.1f ",x,y); py=y
+          if (HC[i]>=0 && tcpu>0) cpts=cpts sprintf("%.1f,%.1f ", x, H-6-(HC[i]>tcpu?1:HC[i]/tcpu)*(H-12)) }
         printf "<svg class=\"spark\" viewBox=\"0 0 %d %d\" preserveAspectRatio=\"none\"><defs><linearGradient id=\"g\" x1=\"0\" x2=\"0\" y1=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#ff8a00\" stop-opacity=\".4\"/><stop offset=\"1\" stop-color=\"#ff8a00\" stop-opacity=\"0\"/></linearGradient></defs>", W, H
-        for (k=0;k<=total;k++) printf "<line x1=\"0\" x2=\"%d\" y1=\"%.1f\" y2=\"%.1f\" stroke=\"%s\" stroke-dasharray=\"2 5\"/>", W, H-6-(k/total)*(H-12), H-6-(k/total)*(H-12), (k==total?"#ff2a1a66":"#5a3a12")
-        printf "<polygon points=\"0,%d %s%d,%d\" fill=\"url(#g)\"/><polyline points=\"%s\" fill=\"none\" stroke=\"#ff8a00\" stroke-width=\"2.5\" vector-effect=\"non-scaling-stroke\"/></svg>", H, pts, W, H, pts
-        mins=int((HT[nh]-HT[n0])/60); printf "<div class=\"meta\"><span>%d 分前</span><span>上の赤い点線 = 全 %d 基使用</span><span>現在</span></div>", mins, total
+        for (k=0;k<=4;k++) printf "<line x1=\"0\" x2=\"%d\" y1=\"%.1f\" y2=\"%.1f\" stroke=\"%s\" stroke-dasharray=\"2 5\"/>", W, H-6-(k/4)*(H-12), H-6-(k/4)*(H-12), (k==4?"#ff2a1a66":"#5a3a12")
+        printf "<polygon points=\"0,%d %s%d,%d\" fill=\"url(#g)\"/><polyline points=\"%s\" fill=\"none\" stroke=\"#ff8a00\" stroke-width=\"2.5\" vector-effect=\"non-scaling-stroke\"/>", H, pts, W, H, pts
+        if (cpts!="") printf "<polyline points=\"%s\" fill=\"none\" stroke=\"#b48cff\" stroke-width=\"2\" stroke-dasharray=\"6 3\" vector-effect=\"non-scaling-stroke\"/>", cpts
+        print "</svg>"
+        mins=int((HT[nh]-HT[n0])/60); printf "<div class=\"meta\"><span>%d 分前</span><span><i class=\"sw on\"></i>GPU（%d 基）　<i class=\"sw co\"></i>CPU（%d コア）　赤線 = 満杯</span><span>現在</span></div>", mins, total, tcpu
       } else print "<div class=\"empty\">DATA COLLECTING — 2 回目の更新から表示</div>"
       print "</div></div><div class=\"panel\"><div class=\"ph\">■ 待機ジョブ<i>Pending queue</i></div><div class=\"pb\">"
-      if (np) { print "<table><tr><th>JOB</th><th>USER</th><th>NAME</th><th>CPU</th><th>MEM</th><th>REASON</th></tr>"
-        for (i=1;i<=np;i++) printf "<tr%s><td>%s</td><td><i class=\"u\" style=\"--h:%d\"></i>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", (P_u[i]==me?" class=\"me\"":""), e(P_id[i]), hue(P_u[i]), e(who(P_u[i])), e(P_n[i]), P_c[i], e(P_m[i]), chip(P_r[i])
+      if (np) { print "<table><tr><th>JOB</th><th>USER</th><th>NAME</th><th>GPU</th><th>CPU</th><th>MEM</th><th>REASON</th></tr>"
+        for (i=1;i<=np;i++) printf "<tr%s><td>%s</td><td><i class=\"u\" style=\"--h:%d\"></i>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", (P_u[i]==me?" class=\"me\"":""), e(P_id[i]), hue(P_u[i]), e(who(P_u[i])), e(P_n[i]), (P_g[i]>0? P_g[i] : "—"), P_c[i], e(P_m[i]), chip(P_r[i])
         print "</table>" } else print "<div class=\"empty\">NO PENDING JOBS — 待ちなし</div>"
       print "</div></div></div>"
-      k=0; for (i=1;i<=nr;i++) if (R_g[i]==0) k++
-      if (k) { print "<div class=\"panel\" style=\"margin-top:16px\"><div class=\"ph\">■ GPU を使わない実行中ジョブ<i>CPU only</i></div><div class=\"pb\"><table><tr><th>JOB</th><th>USER</th><th>NAME</th><th>CPU</th><th>MEM</th><th>ELAPSED</th></tr>"
-        for (i=1;i<=nr;i++) if (R_g[i]==0) printf "<tr%s><td>%s</td><td><i class=\"u\" style=\"--h:%d\"></i>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", (R_u[i]==me?" class=\"me\"":""), e(R_id[i]), hue(R_u[i]), e(who(R_u[i])), e(R_n[i]), R_c[i], e(R_m[i]), hm(R_t[i])
-        print "</table></div></div>" }
-      print "<div class=\"foot\">枠の色：<b style=\"color:#ff8a00\">橙</b> = 稼働中　<b style=\"color:#3dff6e\">緑</b> = 自分のジョブ　<b style=\"color:#ff2a1a\">赤</b> = 上限時間の 85% を超えた（点滅）<br>理由の色：<span class=\"chip\" style=\"--c:#f59e0b\">GPU 上限</span> <span class=\"chip\" style=\"--c:#f97316\">CPU 上限</span> <span class=\"chip\" style=\"--c:#ef4444\">メモリ上限</span> <span class=\"chip\" style=\"--c:#8b5cf6\">前のジョブ待ち</span> <span class=\"chip\" style=\"--c:#06b6d4\">配列の同時実行数</span></div>"
+      print "<div class=\"foot\">枠の色：<b style=\"color:#ff8a00\">橙</b> = 稼働中　<b style=\"color:#3dff6e\">緑</b> = 自分のジョブ　<b style=\"color:#ff2a1a\">赤</b> = 上限時間の 85% を超えた（点滅）・ CPU は割り当てられたコア数（実際の負荷ではありません）<br>理由の色：<span class=\"chip\" style=\"--c:#f59e0b\">GPU 上限</span> <span class=\"chip\" style=\"--c:#f97316\">CPU 上限</span> <span class=\"chip\" style=\"--c:#ef4444\">メモリ上限</span> <span class=\"chip\" style=\"--c:#8b5cf6\">前のジョブ待ち</span> <span class=\"chip\" style=\"--c:#06b6d4\">配列の同時実行数</span></div>"
       print "</div><div class=\"tape\"></div><script>let s=" interval ";" ejs "</script></body></html>"
     }
     BEGIN { ecss=ENVIRON["ECSS"]; ejs=ENVIRON["EJS"]; err=ENVIRON["GW_ERR"]
@@ -172,8 +195,8 @@ render() {
       } else { np++; P_id[np]=$1; P_u[np]=$2; P_n[np]=$3; P_g[np]=g; P_r[np]=$9; P_c[np]=$7; P_m[np]=$8 }
     }
     END {
-      if (err=="") { print epoch, used+0 >> hist; close(hist) }
-      nh=0; while ((getline line < hist) > 0) { split(line,a," "); nh++; HT[nh]=a[1]; HU[nh]=a[2] }
+      if (err=="") { print epoch, used+0, cu+0 >> hist; close(hist) }
+      nh=0; while ((getline line < hist) > 0) { split(line,a," "); nh++; HT[nh]=a[1]; HU[nh]=a[2]; HC[nh]=(a[3]==""? -1 : a[3]+0) }
       free=total-used; if (free<0) free=0
       if (theme=="eva") { eva(); exit }
       print "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
