@@ -3,6 +3,7 @@
 # team's jobs over ssh and rewrites ~/gpu_status.html, a dashboard that reloads itself.
 #   bash gpu_watch.sh            (stop with Ctrl+C)
 #   INTERVAL=60 bash gpu_watch.sh
+#   THEME=plain bash gpu_watch.sh   (前の見た目に戻す)
 # Optional ~/.gpu_watch_names: one "user_000xx_1a6e94 表示名" per line, to show names instead of IDs.
 # Needs `ssh gmo` to work. One ssh connection is kept open, so the passphrase is asked once.
 INTERVAL=${INTERVAL:-30}
@@ -12,6 +13,7 @@ TEAM_GPUS=${TEAM_GPUS:-4}
 OUT=${OUT:-$HOME/gpu_status.html}
 HIST=${HIST:-$HOME/.gpu_watch_history}
 NAMES=${NAMES:-$HOME/.gpu_watch_names}
+THEME=${THEME:-eva}   # eva = 黒とオレンジの警告パネル風 / plain = 前の見た目
 CP="$HOME/.ssh/cm-gpuwatch-%r@%h:%p"
 SSH=(ssh -o ControlMaster=auto -o ControlPath="$CP" -o ControlPersist=10m -o ConnectTimeout=15 "$HOST")
 
@@ -20,11 +22,69 @@ ME=$("${SSH[@]}" 'echo $USER')
 trap '"${SSH[@]}" -O exit >/dev/null 2>&1; rm -f "$TASKF"; echo; echo stopped; exit 0' INT TERM
 touch "$HIST" "$NAMES"
 
+EVA_CSS=$(cat <<'CSS'
+:root{--o:#ff8a00;--r:#ff2a1a;--g:#3dff6e;--bg:#050505;--dim:#5a3a12;--txt:#ffd9a8;--sub:#b07a40;--m:"Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif;--d:"DIN Condensed","DIN Alternate","Bahnschrift","Arial Narrow",sans-serif;--s:"Hiragino Sans","Yu Gothic",sans-serif}
+*{box-sizing:border-box}html{background:var(--bg)}
+body{margin:0;min-height:100vh;color:var(--txt);font-family:var(--d);background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='56' height='100'><path d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100' fill='none' stroke='%23ff8a00' stroke-opacity='.08'/></svg>"),radial-gradient(900px 500px at 85% -10%,#2a1200 0,transparent 70%),var(--bg)}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.3) 0 1px,transparent 1px 3px)}
+.tape{height:14px;background:repeating-linear-gradient(-45deg,var(--o) 0 14px,#000 14px 28px)}
+.wrap{padding:20px 28px 24px}
+.en{font-family:var(--d);letter-spacing:.2em;font-size:13px;color:var(--o);text-transform:uppercase}
+header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid var(--o);padding-bottom:12px;margin-bottom:16px}
+h1{font-family:var(--m);font-weight:900;font-size:60px;margin:4px 0;color:#fff;transform:scaleX(.8);transform-origin:left;letter-spacing:-.02em;line-height:1;text-shadow:0 0 22px rgba(255,138,0,.45)}
+.clock{text-align:right}.clock b{display:block;font-size:56px;line-height:1;color:var(--o);font-weight:700;font-variant-numeric:tabular-nums;text-shadow:0 0 14px rgba(255,138,0,.7)}
+.alert{display:flex;align-items:baseline;gap:20px;padding:10px 18px;margin-bottom:16px;border:2px solid var(--o)}
+.alert b{font-family:var(--m);font-weight:900;font-size:32px;color:#fff;transform:scaleX(.85);transform-origin:left;display:inline-block}
+.alert span{letter-spacing:.2em;font-size:15px}
+.alert.ok{border-color:var(--g);background:linear-gradient(90deg,rgba(61,255,110,.16),transparent 70%)}.alert.ok span{color:var(--g)}
+.alert.red{border-color:var(--r);background:repeating-linear-gradient(-45deg,rgba(255,42,26,.24) 0 16px,rgba(255,42,26,.08) 16px 32px)}.alert.red b{color:var(--r);text-shadow:0 0 14px var(--r)}.alert.red span{color:var(--r)}
+.blink{animation:bl 1.1s steps(2,start) infinite}@keyframes bl{to{visibility:hidden}}
+.grid{display:grid;grid-template-columns:270px 1fr;gap:16px;margin-bottom:16px}
+.panel{border:1px solid var(--dim);background:rgba(10,6,2,.85)}
+.ph{background:var(--o);color:#000;font-family:var(--m);font-weight:900;font-size:15px;padding:4px 12px;letter-spacing:.05em}.ph i{font-style:normal;font-family:var(--d);letter-spacing:.22em;font-size:12px;margin-left:10px;opacity:.7}
+.core svg{width:100%;max-width:230px;display:block;margin:14px auto 0}
+.hx0{fill:rgba(255,138,0,.05);stroke:#2a1a08;stroke-width:12}
+.hx1{fill:none;stroke:var(--o);stroke-width:12;filter:drop-shadow(0 0 6px var(--o))}.hx1.full{stroke:var(--r);filter:drop-shadow(0 0 8px var(--r))}
+.big{font-family:var(--d);font-size:88px;fill:#fff;text-anchor:middle;font-weight:700}.of{font-size:42px;fill:var(--o)}.lab{font-family:var(--d);fill:var(--o);text-anchor:middle;font-size:20px;letter-spacing:.2em}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--dim);margin:12px;border:1px solid var(--dim)}.stats div{background:#0a0602;text-align:center;padding:6px 2px}.stats b{display:block;font-size:32px;color:var(--o);font-weight:700}.stats span{font-size:11px;letter-spacing:.1em;color:var(--sub);font-family:var(--s)}
+.slots{display:grid;gap:12px;padding:12px}
+.slot{--bc:var(--o);--cut:polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,22px 100%,0 calc(100% - 22px));clip-path:var(--cut);background:var(--bc);padding:2px;min-height:230px}
+.slot .in{clip-path:var(--cut);height:100%;padding:12px 14px 14px;display:flex;flex-direction:column;gap:3px;background:linear-gradient(170deg,color-mix(in srgb,var(--bc) 22%,transparent),transparent 62%),#070401}
+.slot.me{--bc:var(--g)}.slot.warn{--bc:var(--r)}.slot.warn .tl b{animation:bl 1.1s steps(2,start) infinite}
+.slot.free{--bc:#3a2a14}.slot.free .in{background:repeating-linear-gradient(-45deg,#0a0703 0 10px,#0e0a05 10px 20px)}
+.top{display:flex;justify-content:space-between;align-items:center;font-size:17px;letter-spacing:.16em;color:var(--bc)}
+.st{font-family:var(--m);font-weight:900;font-size:13px;letter-spacing:.1em;padding:1px 8px;background:var(--bc);color:#000}
+.slot.free .top{color:#7a5a30}.slot.free .st{background:none;color:#7a5a30;border:1px solid #3a2a14}
+.jid{font-size:13px;letter-spacing:.16em;color:var(--sub)}
+.name{font-family:var(--m);font-weight:900;font-size:22px;color:#fff;line-height:1.15;word-break:break-all;margin-top:2px}
+.user{font-size:13px;font-family:var(--s);color:var(--txt)}
+.u{display:inline-block;width:8px;height:8px;margin-right:7px;background:hsl(var(--h) 80% 60%);transform:rotate(45deg)}
+.tl{margin-top:auto;padding-top:6px}.tl span{display:block;font-size:11px;letter-spacing:.14em;color:var(--sub);font-family:var(--s)}.tl b{font-size:42px;line-height:1;color:var(--bc);font-weight:700;font-variant-numeric:tabular-nums;text-shadow:0 0 10px var(--bc)}
+.seg{height:8px;background:repeating-linear-gradient(90deg,#2a1a08 0 6px,transparent 6px 8px);margin-top:4px}.seg i{display:block;height:100%;background:repeating-linear-gradient(90deg,var(--bc) 0 6px,transparent 6px 8px)}
+.meta{display:flex;justify-content:space-between;gap:6px;font-size:12px;color:var(--sub);font-family:var(--s);margin-top:3px}
+.idle{margin:auto 0;text-align:center;font-size:36px;letter-spacing:.3em;color:#4a3518}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}.pb{padding:6px 12px 12px}
+.spark{display:block;width:100%;height:120px}
+table{width:100%;border-collapse:collapse;font-size:13px;font-family:var(--s)}th{font-family:var(--d);letter-spacing:.16em;color:var(--o);font-weight:400;text-align:left;font-size:13px;border-bottom:1px solid var(--o);padding:7px 8px}td{padding:7px 8px;border-bottom:1px solid #2a1a08}tr.me td{color:var(--g)}
+.chip{display:inline-block;padding:1px 8px;font-size:12px;border:1px solid var(--c);color:var(--c);background:color-mix(in srgb,var(--c) 15%,transparent)}
+.empty{padding:16px 4px;color:#7a5a30;letter-spacing:.16em}
+.foot{margin-top:14px;font-size:12px;color:var(--sub);font-family:var(--s);line-height:2}
+@media(max-width:900px){.grid,.two{grid-template-columns:1fr}.slots{grid-template-columns:repeat(2,1fr)!important}h1{font-size:44px}}
+CSS
+)
+EVA_JS=$(cat <<'JS'
+const c=document.getElementById("cd"),T=[...document.querySelectorAll("[data-rem]")];
+const f=x=>{x=Math.max(0,x);const p=n=>String(n).padStart(2,"0");return p(Math.floor(x/3600))+":"+p(Math.floor(x%3600/60))+":"+p(x%60)};
+setInterval(()=>{s--;if(s<=0){location.reload();return}c.textContent=s;T.forEach(t=>{const v=+t.dataset.rem+(t.dataset.up?1:-1);t.dataset.rem=v;t.textContent=f(v)})},1000)
+JS
+)
+
 render() {
   local data="$1" now="$2" err="$3" epoch
   epoch=$(date +%s)
   echo "$data" | awk -F'|' -v me="$ME" -v total="$TEAM_GPUS" -v now="$now" -v epoch="$epoch" \
-      -v interval="$INTERVAL" -v part="$PART" -v err="$err" -v hist="$HIST" -v names="$NAMES" -v taskf="$TASKF" '
+      -v interval="$INTERVAL" -v part="$PART" -v err="$err" -v hist="$HIST" -v names="$NAMES" -v taskf="$TASKF" \
+      -v theme="$THEME" -v ecss="$EVA_CSS" -v ejs="$EVA_JS" '
     function e(s){ gsub(/&/,"\\&amp;",s); gsub(/</,"\\&lt;",s); gsub(/>/,"\\&gt;",s); return s }
     function gpus(s,  n){ if (s !~ /gpu/) return 0; n=s; sub(/.*gpu[^0-9]*/,"",n); n+=0; return (n>0?n:1) }
     function secs(t,  d,p,a,n){ if (t !~ /^[0-9]/) return 0; d=0
@@ -38,6 +98,58 @@ render() {
       if (r ~ /GRES/) c="#f59e0b"; else if (r ~ /Cpu/) c="#f97316"; else if (r ~ /Mem/) c="#ef4444"
       else if (r ~ /Dependency/) c="#8b5cf6"; else if (r ~ /ArrayTaskLimit/) c="#06b6d4"; else if (r ~ /Priority|Resources/) c="#3b82f6"
       return "<span class=\"chip\" style=\"--c:" c "\">" e(r) "</span>" }
+    function hms(s){ if (s<0) s=0; return sprintf("%02d:%02d:%02d", int(s/3600), int((s%3600)/60), s%60) }
+    function eva(   pct,i,j,s,lim,frac,title,sub2,cls,n0,cnt,W,H,pts,area,x,y,px,k,mins){
+      pct=(total>0? used/total : 0); if (pct>1) pct=1
+      print "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
+      print "<meta http-equiv=\"refresh\" content=\"" interval+15 "\"><title>GPU " used+0 "/" total " · VIKING</title><style>" ecss "</style></head><body>"
+      print "<div class=\"tape\"></div><div class=\"wrap\">"
+      print "<header><div><div class=\"en\">Team VIKING // Compute node status // " e(part) "</div><h1>GPU稼働状況</h1><div class=\"en\">Operator: " e(who(me)) "</div></div>"
+      print "<div class=\"clock\"><div class=\"en\">Last sync</div><b>" now "</b><div class=\"en\">Next sync <span id=\"cd\">" interval "</span> sec</div></div></header>"
+      if (err!="") print "<div class=\"alert red\"><b class=\"blink\">通信途絶</b><span>CONNECTION LOST — " e(err) "</span></div>"
+      else if (free==0) print "<div class=\"alert red\"><b class=\"blink\">空きGPUなし</b><span>ALL UNITS ENGAGED — " np+0 " JOB(S) WAITING</span></div>"
+      else printf "<div class=\"alert ok\"><b>空き %d 基</b><span>%d UNIT(S) STANDING BY</span></div>\n", free, free
+      print "<div class=\"grid\"><div class=\"panel core\"><div class=\"ph\">■ 稼働率<i>Operation rate</i></div>"
+      printf "<svg viewBox=\"0 0 200 200\"><polygon points=\"100,10 180,56 180,144 100,190 20,144 20,56\" class=\"hx0\"/>"
+      printf "<polygon points=\"100,10 180,56 180,144 100,190 20,144 20,56\" class=\"hx1%s\" style=\"stroke-dasharray:%.1f 600\"/>", (pct>=1?" full":""), 553*pct
+      printf "<text x=\"100\" y=\"122\" class=\"big\">%d<tspan class=\"of\">/%d</tspan></text><text x=\"100\" y=\"150\" class=\"lab\">%d%%</text></svg>", used, total, pct*100
+      printf "<div class=\"stats\"><div><b>%d</b><span>空き</span></div><div><b>%d</b><span>稼働中</span></div><div><b>%d</b><span>待機中</span></div></div></div>\n", free, nr, np
+      printf "<div class=\"panel\"><div class=\"ph\">■ 演算ユニット<i>GPU units</i></div><div class=\"slots\" style=\"grid-template-columns:repeat(%d,1fr)\">\n", total
+      s=0
+      for (i=1;i<=nr;i++) for (j=1;j<=R_g[i] && s<total;j++) { s++
+        lim=R_l[i]; frac=(lim>0? R_t[i]/lim : 0); if (frac>1) frac=1
+        title=(R_task[i]!="" ? R_task[i] : R_n[i]); sub2=(R_task[i]!="" ? who(R_u[i]) " · " R_n[i] : who(R_u[i]))
+        cls="slot busy" (R_u[i]==me?" me":"") (frac>.85?" warn":"")
+        printf "<div class=\"%s\"><div class=\"in\"><div class=\"top\"><span>GPU-%02d</span><span class=\"st\">稼働中</span></div>", cls, s
+        printf "<div class=\"jid\">JOB #%s</div><div class=\"name\">%s</div><div class=\"user\"><i class=\"u\" style=\"--h:%d\"></i>%s</div>", e(R_id[i]), e(title), hue(R_u[i]), e(sub2)
+        if (lim>0) printf "<div class=\"tl\"><span>残り時間</span><b data-rem=\"%d\">%s</b></div>", lim-R_t[i], hms(lim-R_t[i])
+        else printf "<div class=\"tl\"><span>経過時間</span><b data-rem=\"%d\" data-up=\"1\">%s</b></div>", R_t[i], hms(R_t[i])
+        printf "<div class=\"seg\"><i style=\"width:%d%%\"></i></div><div class=\"meta\"><span>%s コア · %s</span><span>%s</span></div></div></div>\n", frac*100, R_c[i], e(R_m[i]), (lim>0? "上限 " hm(lim) : "")
+      }
+      while (s<total) { s++; printf "<div class=\"slot free\"><div class=\"in\"><div class=\"top\"><span>GPU-%02d</span><span class=\"st\">待機</span></div><div class=\"idle\">STANDBY</div><div class=\"meta\"><span>いつでも使えます</span></div></div></div>\n", s }
+      print "</div></div></div>"
+      print "<div class=\"two\"><div class=\"panel\"><div class=\"ph\">■ 稼働履歴<i>Load history</i></div><div class=\"pb\">"
+      n0=(nh>240? nh-239 : 1); cnt=nh-n0+1
+      if (cnt>=2) {
+        W=600; H=120; pts=""; px=0
+        for (i=n0;i<=nh;i++) { x=(i-n0)*W/(cnt-1); y=H-6-(HU[i]/total)*(H-12); if (i>n0) pts=pts sprintf("%.1f,%.1f ",x,py); pts=pts sprintf("%.1f,%.1f ",x,y); py=y }
+        printf "<svg class=\"spark\" viewBox=\"0 0 %d %d\" preserveAspectRatio=\"none\"><defs><linearGradient id=\"g\" x1=\"0\" x2=\"0\" y1=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#ff8a00\" stop-opacity=\".4\"/><stop offset=\"1\" stop-color=\"#ff8a00\" stop-opacity=\"0\"/></linearGradient></defs>", W, H
+        for (k=0;k<=total;k++) printf "<line x1=\"0\" x2=\"%d\" y1=\"%.1f\" y2=\"%.1f\" stroke=\"%s\" stroke-dasharray=\"2 5\"/>", W, H-6-(k/total)*(H-12), H-6-(k/total)*(H-12), (k==total?"#ff2a1a66":"#5a3a12")
+        printf "<polygon points=\"0,%d %s%d,%d\" fill=\"url(#g)\"/><polyline points=\"%s\" fill=\"none\" stroke=\"#ff8a00\" stroke-width=\"2.5\" vector-effect=\"non-scaling-stroke\"/></svg>", H, pts, W, H, pts
+        mins=int((HT[nh]-HT[n0])/60); printf "<div class=\"meta\"><span>%d 分前</span><span>上の赤い点線 = 全 %d 基使用</span><span>現在</span></div>", mins, total
+      } else print "<div class=\"empty\">DATA COLLECTING — 2 回目の更新から表示</div>"
+      print "</div></div><div class=\"panel\"><div class=\"ph\">■ 待機ジョブ<i>Pending queue</i></div><div class=\"pb\">"
+      if (np) { print "<table><tr><th>JOB</th><th>USER</th><th>NAME</th><th>CPU</th><th>MEM</th><th>REASON</th></tr>"
+        for (i=1;i<=np;i++) printf "<tr%s><td>%s</td><td><i class=\"u\" style=\"--h:%d\"></i>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", (P_u[i]==me?" class=\"me\"":""), e(P_id[i]), hue(P_u[i]), e(who(P_u[i])), e(P_n[i]), P_c[i], e(P_m[i]), chip(P_r[i])
+        print "</table>" } else print "<div class=\"empty\">NO PENDING JOBS — 待ちなし</div>"
+      print "</div></div></div>"
+      k=0; for (i=1;i<=nr;i++) if (R_g[i]==0) k++
+      if (k) { print "<div class=\"panel\" style=\"margin-top:16px\"><div class=\"ph\">■ GPU を使わない実行中ジョブ<i>CPU only</i></div><div class=\"pb\"><table><tr><th>JOB</th><th>USER</th><th>NAME</th><th>CPU</th><th>MEM</th><th>ELAPSED</th></tr>"
+        for (i=1;i<=nr;i++) if (R_g[i]==0) printf "<tr%s><td>%s</td><td><i class=\"u\" style=\"--h:%d\"></i>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", (R_u[i]==me?" class=\"me\"":""), e(R_id[i]), hue(R_u[i]), e(who(R_u[i])), e(R_n[i]), R_c[i], e(R_m[i]), hm(R_t[i])
+        print "</table></div></div>" }
+      print "<div class=\"foot\">枠の色：<b style=\"color:#ff8a00\">橙</b> = 稼働中　<b style=\"color:#3dff6e\">緑</b> = 自分のジョブ　<b style=\"color:#ff2a1a\">赤</b> = 上限時間の 85% を超えた（点滅）<br>理由の色：<span class=\"chip\" style=\"--c:#f59e0b\">GPU 上限</span> <span class=\"chip\" style=\"--c:#f97316\">CPU 上限</span> <span class=\"chip\" style=\"--c:#ef4444\">メモリ上限</span> <span class=\"chip\" style=\"--c:#8b5cf6\">前のジョブ待ち</span> <span class=\"chip\" style=\"--c:#06b6d4\">配列の同時実行数</span></div>"
+      print "</div><div class=\"tape\"></div><script>let s=" interval ";" ejs "</script></body></html>"
+    }
     BEGIN { while ((getline line < names) > 0) { split(line,a," "); if (a[1]!="") { sub(/^[^ ]+ +/,"",line); alias[a[1]]=line } }
             while ((getline line < taskf) > 0) { split(line,a,"|"); if (a[1]!="") TK[a[1]]=a[2] } }
     NF>=9 {
@@ -53,6 +165,7 @@ render() {
       if (err=="") { print epoch, used+0 >> hist; close(hist) }
       nh=0; while ((getline line < hist) > 0) { split(line,a," "); nh++; HT[nh]=a[1]; HU[nh]=a[2] }
       free=total-used; if (free<0) free=0
+      if (theme=="eva") { eva(); exit }
       print "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
       print "<meta http-equiv=\"refresh\" content=\"" interval+15 "\"><title>GPU " used+0 "/" total " · VIKING</title><style>"
       print ":root{--bg:#0b1020;--card:#121a2f;--line:#1f2a44;--txt:#e6ebf5;--sub:#8b97b3;--free:#1b2540}"
