@@ -104,7 +104,7 @@ table{width:100%;border-collapse:collapse;font-size:13px;font-family:var(--s)}th
 .rgrid{display:grid;grid-template-columns:190px 300px 1fr;gap:16px;padding:12px;align-items:start}.rgrid .hg svg{max-width:190px}
 .meter{--bc:var(--x);margin-bottom:9px}.meter.hot{--bc:var(--r)}.mh{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--sub);font-family:var(--s)}.mh b{font-family:var(--d);font-size:21px;color:#fff;font-weight:700}
 .rprocs{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}.slot.rp{--bc:var(--x)}.slot.rp.me{--bc:var(--g)}.slot.rp.free{--bc:#123a42}.slot.rp.free .top,.slot.rp.free .idle{color:#1d5a66}.slot.rp .name .u{margin-right:8px}
-.cmd{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--sub);word-break:break-all;line-height:1.35;max-height:2.8em;overflow:hidden}
+.cmd{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--sub);word-break:break-all;line-height:1.35;max-height:4.1em;overflow:hidden}.ctr{display:block;color:#7fdcec}
 .rtag{font-style:normal;margin-left:auto;font-family:var(--m);font-weight:900;font-size:16px;padding:2px 12px;border:1px solid #31e6ff;color:#31e6ff}.rtag.busy{background:#31e6ff;color:#000}.rtag.off{border-color:var(--r);color:var(--r)}
 .sw.rx{background:#31e6ff}
 @media(max-width:1100px){.rgrid{grid-template-columns:1fr 1fr}.rprocs{grid-column:1/-1}}
@@ -181,8 +181,8 @@ render() {
       printf "<div class=\"meta\"><span>%s</span></div></div><div class=\"rprocs\">", e(RG)
       if (!rn) print "<div class=\"slot mini rp free\"><div class=\"in\"><div class=\"top\"><span><em class=\"mk rx\">RTX</em>GPU</span><span class=\"st\">待機</span></div><div class=\"idle\">STANDBY</div><div class=\"meta\"><span>GPU を使っているプロセスはありません</span></div></div></div>"
       for (i=1;i<=rn;i++) {
-        printf "<div class=\"slot mini rp%s\"><div class=\"in\"><div class=\"top\"><span><em class=\"mk rx\">RTX</em>PID %s</span><span class=\"st\">使用中</span></div>", (RPU[i]==rme?" me":""), e(RPID[i])
-        printf "<div class=\"name\"><i class=\"u\" style=\"--h:%d\"></i>%s</div><div class=\"cmd\">%s</div>", hue(RPU[i]), e(who(RPU[i])), e(RPC[i])
+        printf "<div class=\"slot mini rp%s\"><div class=\"in\"><div class=\"top\"><span><em class=\"mk rx\">RTX</em>PID %s</span><span class=\"st\">使用中</span></div>", (RPO[i]==rme?" me":""), e(RPID[i])
+        printf "<div class=\"name\"><i class=\"u\" style=\"--h:%d\"></i>%s</div><div class=\"cmd\">%s</div>", hue(RPO[i]), e(who(RPO[i])), (RPK[i]!=""? "<span class=\"ctr\">コンテナ " e(RPK[i]) "</span>" : "") e(RPC[i])
         printf "<div class=\"tl\"><span>経過時間</span><b data-rem=\"%d\" data-up=\"1\">%s</b></div>", RPT[i], hms(RPT[i])
         printf "<div class=\"seg\"><i style=\"width:%d%%\"></i></div><div class=\"meta\"><span>VRAM %.1f GB</span><span>%d%%</span></div></div></div>\n", (RMT>0? RPM[i]*100/RMT : 0), RPM[i]/1024, (RMT>0? RPM[i]*100/RMT : 0)
       }
@@ -258,7 +258,8 @@ render() {
               if (line ~ /^@@ME /) rme=substr(line,6)
               else if (line ~ /^@@GPU /) { split(substr(line,7),b,", *"); RG=b[1]; RU=b[2]+0; RMU=b[3]+0; RMT=b[4]+0; RT=b[5]+0; RP=b[6]+0; RPL=b[7]+0 }
               else if (line ~ /^@@SYS /) { split(substr(line,7),b," "); RNC=b[1]+0; RLD=b[2]+0; RRU=b[3]+0; RRT=b[4]+0 }
-              else if (line ~ /^@@P /) { split(substr(line,5),b,"|"); rn++; RPID[rn]=b[1]; RPU[rn]=b[2]; RPT[rn]=b[3]+0; RPM[rn]=b[4]+0; RPC[rn]=b[5] } }
+              else if (line ~ /^@@P /) { split(substr(line,5),b,"|"); rn++; RPID[rn]=b[1]; RPU[rn]=b[2]; RPT[rn]=b[3]+0; RPM[rn]=b[4]+0; RPC[rn]=b[5]; RPK[rn]=b[6]
+                RPO[rn]=RPU[rn]; if (RPK[rn] ~ /^rtx-[^-]+-/) { split(RPK[rn],c,"-"); RPO[rn]=c[2] } } }
             rtx_ok=(rtx_on && RG!="")
             if (rtx_on && !rtx_ok && rtx_err=="") rtx_err="nvidia-smi の出力がありません" }
     NF>=9 {
@@ -316,7 +317,7 @@ render() {
       if (rtx_on) { print "<div class=\"card\" style=\"margin-bottom:18px\"><h2>RTX PRO 6000</h2>"
         if (!rtx_ok) print "<div class=\"err\">取得に失敗しました： " e(rtx_err) "</div>"
         else { printf "<div class=\"sub\">使用率 <b>%d%%</b> ・ VRAM %.1f / %.0f GB ・ %d ℃ ・ %.0f W</div><table><tr><th>PID</th><th>ユーザー</th><th>VRAM</th><th>経過</th><th>コマンド</th></tr>", RU, RMU/1024, RMT/1024, RT, RP
-          for (i=1;i<=rn;i++) printf "<tr%s><td>%s</td><td><span class=\"u\" style=\"--h:%d\"></span>%s</td><td>%.1f GB</td><td>%s</td><td>%s</td></tr>", (RPU[i]==rme?" class=\"me\"":""), e(RPID[i]), hue(RPU[i]), e(who(RPU[i])), RPM[i]/1024, hm(RPT[i]), e(RPC[i])
+          for (i=1;i<=rn;i++) printf "<tr%s><td>%s</td><td><span class=\"u\" style=\"--h:%d\"></span>%s</td><td>%.1f GB</td><td>%s</td><td>%s</td></tr>", (RPO[i]==rme?" class=\"me\"":""), e(RPID[i]), hue(RPO[i]), e(who(RPO[i])), RPM[i]/1024, hm(RPT[i]), (RPK[i]!=""? "[" e(RPK[i]) "] " : "") e(RPC[i])
           print "</table>"; if (!rn) print "<div class=\"empty\">GPU を使っているプロセスはありません</div>" }
         print "</div>" }
       print "<div class=\"two\"><div class=\"card\"><h2>使用中の GPU（直近）</h2>"
@@ -371,11 +372,14 @@ IFS= read -r -d '' RTX_REMOTE <<'R'
 echo "@@ME $(id -un)"
 nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,power.limit --format=csv,noheader,nounits | head -1 | sed 's/^/@@GPU /'
 echo "@@SYS $(nproc) $(cut -d' ' -f1 /proc/loadavg) $(free -m | awk '/^Mem:/{print $3, $2}')"
+CMAP=$(docker ps --no-trunc --format '{{.ID}} {{.Names}}' 2>/dev/null)
 nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader,nounits 2>/dev/null | while IFS=', ' read -r pid mem; do
   [ "$pid" -gt 0 ] 2>/dev/null || continue
   set -- $(ps -o user:32=,etimes= -p "$pid" 2>/dev/null)
   cmd=$(ps -o args= -p "$pid" 2>/dev/null | cut -c1-90 | tr '|' '/')
-  echo "@@P $pid|${1:-?}|${2:-0}|$mem|$cmd"
+  cid=$(grep -o -m1 '[0-9a-f]\{64\}' /proc/"$pid"/cgroup 2>/dev/null | head -1)
+  cname=""; [ -n "$cid" ] && cname=$(printf '%s\n' "$CMAP" | awk -v c="$cid" '$1==c{print $2}')
+  echo "@@P $pid|${1:-?}|${2:-0}|$mem|$cmd|$cname"
 done
 true
 R
