@@ -89,6 +89,17 @@ table{width:100%;border-collapse:collapse;font-size:13px;font-family:var(--s)}th
 .slot.mini{--bc:#b48cff;--cut:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px));min-height:0}.slot.mini.me{--bc:var(--g)}.slot.mini.warn{--bc:var(--r)}
 .slot.mini .in{padding:8px 12px 10px}.slot.mini .name{font-size:17px}.slot.mini .tl b{font-size:28px}.slot.mini .top{font-size:14px}
 .empty{padding:12px 16px}
+.zone{--zc:var(--o);position:relative;border:2px solid var(--zc);padding:0 14px 14px;margin-bottom:20px;background:linear-gradient(180deg,color-mix(in srgb,var(--zc) 7%,transparent),transparent 240px);overflow:hidden}
+.zone.rx{--zc:#31e6ff}.zone>*{position:relative;z-index:1}
+.zone::after{content:attr(data-w);position:absolute;right:18px;bottom:-34px;font-family:var(--d);font-weight:700;font-size:190px;line-height:1;color:var(--zc);opacity:.07;pointer-events:none;z-index:0}
+.zh{display:flex;align-items:center;gap:16px;margin:0 -14px 14px;padding:4px 16px;background:var(--zc);color:#000}.zh b{font-family:var(--d);font-size:38px;line-height:1.1;letter-spacing:.06em}.zh span{font-family:var(--m);font-weight:900;font-size:15px}.zh em{margin-left:auto;font-style:normal;font-family:var(--d);letter-spacing:.2em;font-size:15px}
+.zone .grid{margin-bottom:14px}.zone.rx .rtx{margin:0}.zone.rx .rtx .ph{background:#31e6ff}
+.mk{font-style:normal;display:inline-block;background:var(--o);color:#000;font-family:var(--d);font-weight:700;letter-spacing:.06em;font-size:13px;padding:0 5px;margin-right:7px;line-height:1.35}.mk.rx{background:#31e6ff}
+.alerts{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:16px}.alerts.one{grid-template-columns:1fr}.alerts .alert{margin:0;align-items:center}
+.ak{font-style:normal;font-family:var(--d);font-weight:700;font-size:22px;letter-spacing:.06em;padding:0 8px;background:var(--o);color:#000}.ak.rx{background:#31e6ff}
+.alert.rxb{border-color:#31e6ff;background:linear-gradient(90deg,rgba(49,230,255,.16),transparent 70%)}.alert.rxb span{color:#31e6ff}
+.hist{margin-bottom:6px}
+.top{letter-spacing:.06em;gap:6px}.top span{white-space:nowrap}.st{white-space:nowrap}.alert b{white-space:nowrap}.alerts .alert span{letter-spacing:.12em}
 .rtx{--x:#31e6ff;margin-bottom:16px;border-color:#124a55}.rtx .ph{background:var(--x)}.rtx .hx1{stroke:var(--x);filter:drop-shadow(0 0 6px var(--x))}.rtx .hx1.full{stroke:var(--r)}.rtx .lab{fill:var(--x);font-size:17px}
 .rgrid{display:grid;grid-template-columns:190px 300px 1fr;gap:16px;padding:12px;align-items:start}.rgrid .hg svg{max-width:190px}
 .meter{--bc:var(--x);margin-bottom:9px}.meter.hot{--bc:var(--r)}.mh{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--sub);font-family:var(--s)}.mh b{font-family:var(--d);font-size:21px;color:#fff;font-weight:700}
@@ -112,7 +123,7 @@ render() {
   epoch=$(date +%s)
   # Multi-line text (CSS, JS, ssh errors) goes through the environment: macOS awk rejects newlines in -v.
   echo "$data" | ECSS="$EVA_CSS" EJS="$EVA_JS" GW_ERR="$err" RTX_ON="${RTX_HOST:+1}" RTX_ERR="$rtx_err" awk -F'|' -v me="$ME" -v total="$TEAM_GPUS" -v now="$now" -v epoch="$epoch" \
-      -v interval="$INTERVAL" -v part="$PART" -v hist="$HIST" -v names="$NAMES" -v taskf="$TASKF" -v theme="$THEME" -v tcpu="$TEAM_CPUS" -v rtxf="$RTXF" '
+      -v interval="$INTERVAL" -v part="$PART" -v hist="$HIST" -v names="$NAMES" -v taskf="$TASKF" -v theme="$THEME" -v tcpu="$TEAM_CPUS" -v rtxf="$RTXF" -v host="$HOST" -v rhost="$RTX_HOST" '
     function e(s){ gsub(/&/,"\\&amp;",s); gsub(/</,"\\&lt;",s); gsub(/>/,"\\&gt;",s); return s }
     function gpus(s,  n){ if (s !~ /gpu/) return 0; n=s; sub(/.*gpu[^0-9]*/,"",n); n+=0; return (n>0?n:1) }
     function secs(t,  d,p,a,n){ if (t !~ /^[0-9]/) return 0; d=0
@@ -157,7 +168,7 @@ render() {
       return (rn? "<em class=\"rtag busy\">RTX 使用中 " rn "</em>" : "<em class=\"rtag\">RTX 空き</em>")
     }
     function rtxpanel(   i){
-      print "<div class=\"panel rtx\"><div class=\"ph\">■ RTX PRO 6000<i>Team VM · no Slurm · nvidia-smi</i></div>"
+      print "<div class=\"panel rtx\"><div class=\"ph\">■ GPU とプロセス<i>nvidia-smi</i></div>"
       if (!rtx_ok) { print "<div class=\"alert red\" style=\"margin:12px\"><b class=\"blink\">通信途絶</b><span>RTX OFFLINE — " e(rtx_err) "</span></div></div>"; return }
       print "<div class=\"rgrid\"><div>"
       hexr(RU/100, "GPU 使用率", RU "%", (rn? rn " プロセス" : "空き"))
@@ -168,9 +179,9 @@ render() {
       if (RNC>0) meter("VM の CPU 負荷", sprintf("%.1f / %d", RLD, RNC), RLD/RNC, RLD/RNC>=.9)
       if (RRT>0) meter("VM のメモリ", sprintf("%.0f / %.0f GB", RRU/1024, RRT/1024), RRU/RRT, RRU/RRT>=.9)
       printf "<div class=\"meta\"><span>%s</span></div></div><div class=\"rprocs\">", e(RG)
-      if (!rn) print "<div class=\"slot mini rp free\"><div class=\"in\"><div class=\"top\"><span>RTX</span><span class=\"st\">待機</span></div><div class=\"idle\">STANDBY</div><div class=\"meta\"><span>GPU を使っているプロセスはありません</span></div></div></div>"
+      if (!rn) print "<div class=\"slot mini rp free\"><div class=\"in\"><div class=\"top\"><span><em class=\"mk rx\">RTX</em>GPU</span><span class=\"st\">待機</span></div><div class=\"idle\">STANDBY</div><div class=\"meta\"><span>GPU を使っているプロセスはありません</span></div></div></div>"
       for (i=1;i<=rn;i++) {
-        printf "<div class=\"slot mini rp%s\"><div class=\"in\"><div class=\"top\"><span>PID %s</span><span class=\"st\">使用中</span></div>", (RPU[i]==rme?" me":""), e(RPID[i])
+        printf "<div class=\"slot mini rp%s\"><div class=\"in\"><div class=\"top\"><span><em class=\"mk rx\">RTX</em>PID %s</span><span class=\"st\">使用中</span></div>", (RPU[i]==rme?" me":""), e(RPID[i])
         printf "<div class=\"name\"><i class=\"u\" style=\"--h:%d\"></i>%s</div><div class=\"cmd\">%s</div>", hue(RPU[i]), e(who(RPU[i])), e(RPC[i])
         printf "<div class=\"tl\"><span>経過時間</span><b data-rem=\"%d\" data-up=\"1\">%s</b></div>", RPT[i], hms(RPT[i])
         printf "<div class=\"seg\"><i style=\"width:%d%%\"></i></div><div class=\"meta\"><span>VRAM %.1f GB</span><span>%d%%</span></div></div></div>\n", (RMT>0? RPM[i]*100/RMT : 0), RPM[i]/1024, (RMT>0? RPM[i]*100/RMT : 0)
@@ -184,31 +195,43 @@ render() {
       print "<div class=\"tape\"></div><div class=\"wrap\">"
       print "<header><div><div class=\"en\">Team VIKING // Compute node status // " e(part) "</div><h1>計算資源稼働状況</h1><div class=\"en\">Operator: " e(who(me)) "</div></div>"
       print "<div class=\"clock\"><div class=\"en\">Last sync</div><b>" now "</b><div class=\"en\">Next sync <span id=\"cd\">" interval "</span> sec</div></div></header>"
-      if (err!="") print "<div class=\"alert red\"><b class=\"blink\">通信途絶</b><span>CONNECTION LOST — " e(err) "</span></div>"
-      else if (free==0) printf "<div class=\"alert red\"><b class=\"blink\">空きGPUなし</b><span>ALL B300 UNITS ENGAGED — %d JOB(S) WAITING · CPU %d CORES FREE</span>%s</div>\n", np, cfree, rtxtag()
-      else printf "<div class=\"alert ok\"><b>空き B300 %d 基 ・ CPU %d コア</b><span>STANDING BY</span>%s</div>\n", free, cfree, rtxtag()
+      print "<div class=\"alerts" (rtx_on?"":" one") "\">"
+      if (err!="") print "<div class=\"alert red\"><i class=\"ak\">B300</i><b class=\"blink\">通信途絶</b><span>" e(err) "</span></div>"
+      else if (free==0) printf "<div class=\"alert red\"><i class=\"ak\">B300</i><b class=\"blink\">空きGPUなし</b><span>%d JOB(S) WAITING · CPU %d CORES FREE</span></div>\n", np, cfree
+      else printf "<div class=\"alert ok\"><i class=\"ak\">B300</i><b>空き %d 基 ・ CPU %d コア</b><span>STANDING BY</span></div>\n", free, cfree
+      if (rtx_on) {
+        if (!rtx_ok) print "<div class=\"alert red\"><i class=\"ak rx\">RTX</i><b class=\"blink\">通信途絶</b><span>OFFLINE</span></div>"
+        else if (rn) printf "<div class=\"alert rxb\"><i class=\"ak rx\">RTX</i><b>使用中 %d</b><span>GPU %d%% · VRAM %.0f/%.0f GB</span></div>\n", rn, RU, RMU/1024, RMT/1024
+        else print "<div class=\"alert ok\"><i class=\"ak rx\">RTX</i><b>空き</b><span>STANDING BY</span></div>" }
+      print "</div>"
       # ---- row 1: resources | running jobs
-      print "<div class=\"grid\"><div class=\"panel res\"><div class=\"ph\">■ B300 ノード<i>Slurm · " e(part) "</i></div><div class=\"gauges\">"
+      printf "<section class=\"zone b3\" data-w=\"B300\"><div class=\"zh\"><b>B300</b><span>Slurm クラスタ ・ GPU %d 基 ・ CPU %d コア ・ sbatch / srun で使う</span><em>ssh %s</em></div>\n", total, tcpu, e(host)
+      print "<div class=\"grid\"><div class=\"panel res\"><div class=\"ph\">■ 資源<i>" e(part) "</i></div><div class=\"gauges\">"
       hexg(used+0, total, "B300"); hexg(cu+0, tcpu, "CPU")
       printf "</div><div class=\"cpu%s\"><div class=\"cl\"><span>CPU コア割り当て</span><em>1 マス = 1 コア</em></div><div class=\"cells\">", (tcpu>0 && cu/tcpu>=.9?" hot":"")
       k=0; for (i=1;i<=nr;i++) for (j=1;j<=R_c[i]+0 && k<tcpu;j++) { k++; printf "<i class=\"%s\"></i>", (R_u[i]==me?"me":(R_g[i]==0?"co":"on")) }
       while (k<tcpu) { k++; printf "<i></i>" }
       printf "</div><div class=\"meta\"><span><i class=\"sw on\"></i>GPU ジョブ <i class=\"sw co\"></i>CPU のみ <i class=\"sw me\"></i>自分</span><span>自分 %d コア</span></div></div>\n", cme
       printf "<div class=\"stats\"><div><b>%d</b><span>空き GPU</span></div><div><b>%d</b><span>空き CPU</span></div><div><b>%d</b><span>実行中</span></div><div><b>%d</b><span>待ち</span></div></div></div>\n", free, cfree, nr, np
-      print "<div class=\"panel\"><div class=\"ph\">■ B300 稼働中のジョブ<i>Running</i></div>"
-      printf "<div class=\"lbl\"><b>B300 ユニット</b><span>%d / %d 基使用</span></div><div class=\"slots\" style=\"grid-template-columns:repeat(%d,1fr)\">\n", used, total, total
+      print "<div class=\"panel\"><div class=\"ph\">■ 稼働中のジョブ<i>Running</i></div>"
+      printf "<div class=\"lbl\"><b>GPU ユニット</b><span>%d / %d 基使用</span></div><div class=\"slots\" style=\"grid-template-columns:repeat(%d,1fr)\">\n", used, total, total
       s=0
-      for (i=1;i<=nr;i++) for (j=1;j<=R_g[i] && s<total;j++) { s++; card(i, "slot busy", sprintf("GPU-%02d", s)) }
-      while (s<total) { s++; printf "<div class=\"slot free\"><div class=\"in\"><div class=\"top\"><span>GPU-%02d</span><span class=\"st\">待機</span></div><div class=\"idle\">STANDBY</div><div class=\"meta\"><span>いつでも使えます</span></div></div></div>\n", s }
+      for (i=1;i<=nr;i++) for (j=1;j<=R_g[i] && s<total;j++) { s++; card(i, "slot busy", sprintf("<em class=\"mk\">B300</em>GPU-%02d", s)) }
+      while (s<total) { s++; printf "<div class=\"slot free\"><div class=\"in\"><div class=\"top\"><span><em class=\"mk\">B300</em>GPU-%02d</span><span class=\"st\">待機</span></div><div class=\"idle\">STANDBY</div><div class=\"meta\"><span>いつでも使えます</span></div></div></div>\n", s }
       print "</div>"
       nc=0; cc=0; for (i=1;i<=nr;i++) if (R_g[i]==0) { nc++; cc+=R_c[i] }
       printf "<div class=\"lbl co\"><b>CPU のみ</b><span>%d 件 · %d コア</span></div>", nc, cc
-      if (nc) { print "<div class=\"minis\">"; for (i=1;i<=nr;i++) if (R_g[i]==0) card(i, "slot mini", "CPU ONLY"); print "</div>" }
+      if (nc) { print "<div class=\"minis\">"; for (i=1;i<=nr;i++) if (R_g[i]==0) card(i, "slot mini", "<em class=\"mk\">B300</em>CPU ONLY"); print "</div>" }
       else print "<div class=\"empty\">NO CPU-ONLY JOBS — なし</div>"
       print "</div></div>"
-      if (rtx_on) rtxpanel()
+      print "<div class=\"panel\"><div class=\"ph\">■ 待機ジョブ<i>Pending queue</i></div><div class=\"pb\">"
+      if (np) { print "<table><tr><th>JOB</th><th>USER</th><th>NAME</th><th>GPU</th><th>CPU</th><th>MEM</th><th>REASON</th></tr>"
+        for (i=1;i<=np;i++) printf "<tr%s><td>%s</td><td><i class=\"u\" style=\"--h:%d\"></i>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", (P_u[i]==me?" class=\"me\"":""), e(P_id[i]), hue(P_u[i]), e(who(P_u[i])), e(P_n[i]), (P_g[i]>0? P_g[i] : "—"), P_c[i], e(P_m[i]), chip(P_r[i])
+        print "</table>" } else print "<div class=\"empty\">NO PENDING JOBS — 待ちなし</div>"
+      print "</div></div></section>"
+      if (rtx_on) { printf "<section class=\"zone rx\" data-w=\"RTX\"><div class=\"zh\"><b>RTX PRO 6000</b><span>チーム専用 VM ・ GPU 1 基 ・ Slurm なし（使う前に声かけ）</span><em>ssh %s</em></div>\n", e(rhost); rtxpanel(); print "</section>" }
       # ---- row 2: history | pending
-      print "<div class=\"two\"><div class=\"panel\"><div class=\"ph\">■ 稼働履歴<i>Load history</i></div><div class=\"pb\">"
+      print "<div class=\"hist\"><div class=\"panel\"><div class=\"ph\">■ 稼働履歴<i>Load history</i></div><div class=\"pb\">"
       n0=(nh>240? nh-239 : 1); cnt=nh-n0+1
       if (cnt>=2) {
         W=600; H=130; pts=""; cpts=""; rpts=""
@@ -223,12 +246,8 @@ render() {
         print "</svg>"
         mins=int((HT[nh]-HT[n0])/60); printf "<div class=\"meta\"><span>%d 分前</span><span><i class=\"sw on\"></i>B300（%d 基）　<i class=\"sw co\"></i>CPU（%d コア）%s　赤線 = 満杯</span><span>現在</span></div>", mins, total, tcpu, (rtx_on? "　<i class=\"sw rx\"></i>RTX 使用率" : "")
       } else print "<div class=\"empty\">DATA COLLECTING — 2 回目の更新から表示</div>"
-      print "</div></div><div class=\"panel\"><div class=\"ph\">■ 待機ジョブ<i>Pending queue</i></div><div class=\"pb\">"
-      if (np) { print "<table><tr><th>JOB</th><th>USER</th><th>NAME</th><th>GPU</th><th>CPU</th><th>MEM</th><th>REASON</th></tr>"
-        for (i=1;i<=np;i++) printf "<tr%s><td>%s</td><td><i class=\"u\" style=\"--h:%d\"></i>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n", (P_u[i]==me?" class=\"me\"":""), e(P_id[i]), hue(P_u[i]), e(who(P_u[i])), e(P_n[i]), (P_g[i]>0? P_g[i] : "—"), P_c[i], e(P_m[i]), chip(P_r[i])
-        print "</table>" } else print "<div class=\"empty\">NO PENDING JOBS — 待ちなし</div>"
       print "</div></div></div>"
-      print "<div class=\"foot\">枠の色：<b style=\"color:#ff8a00\">橙</b> = 稼働中　<b style=\"color:#3dff6e\">緑</b> = 自分のジョブ　<b style=\"color:#ff2a1a\">赤</b> = 上限時間の 85% を超えた（点滅）・ CPU は割り当てられたコア数（実際の負荷ではありません）<br>理由の色：<span class=\"chip\" style=\"--c:#f59e0b\">GPU 上限</span> <span class=\"chip\" style=\"--c:#f97316\">CPU 上限</span> <span class=\"chip\" style=\"--c:#ef4444\">メモリ上限</span> <span class=\"chip\" style=\"--c:#8b5cf6\">前のジョブ待ち</span> <span class=\"chip\" style=\"--c:#06b6d4\">配列の同時実行数</span></div>"
+      print "<div class=\"foot\">機械：<b style=\"color:#ff8a00\">橙の囲み・B300 の札</b> = B300（Slurm）　<b style=\"color:#31e6ff\">水色の囲み・RTX の札</b> = RTX PRO 6000<br>枠の色：<b style=\"color:#ff8a00\">橙</b> = 稼働中　<b style=\"color:#3dff6e\">緑</b> = 自分のジョブ　<b style=\"color:#ff2a1a\">赤</b> = 上限時間の 85% を超えた（点滅）・ CPU は割り当てられたコア数（実際の負荷ではありません）<br>理由の色：<span class=\"chip\" style=\"--c:#f59e0b\">GPU 上限</span> <span class=\"chip\" style=\"--c:#f97316\">CPU 上限</span> <span class=\"chip\" style=\"--c:#ef4444\">メモリ上限</span> <span class=\"chip\" style=\"--c:#8b5cf6\">前のジョブ待ち</span> <span class=\"chip\" style=\"--c:#06b6d4\">配列の同時実行数</span></div>"
       print "</div><div class=\"tape\"></div><script>let s=" interval ";" ejs "</script></body></html>"
     }
     BEGIN { ecss=ENVIRON["ECSS"]; ejs=ENVIRON["EJS"]; err=ENVIRON["GW_ERR"]
