@@ -2,8 +2,8 @@
 #SBATCH --job-name=evalA-hl
 #SBATCH --partition=part-group_1a6e94
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=128G
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=96G
 #SBATCH --time=16:00:00
 #SBATCH --output=/home/%u/logs/%x-%j.out
 # 評価A を、タスクの設定ファイル（API・プロンプト）だけ替えて回す。中身は ~/jobs/evalA.sh と同じ
@@ -11,6 +11,7 @@
 #   two_arm_lift を高レベル API で: sbatch ~/viking-eval/viking_eval_jobs/evalA_best/evalA_hl.sh
 #   ほかのタスク・設定:           sbatch --export=ALL,TASK=two_arm_handover,CONFIG=<yaml>,TAG=hl,OFF=1900 ...
 # 前の評価A の two_arm_lift は 8 時間で終わらず 434-450 を回し直したので、時間は 16 時間にしてある。
+# CPU・メモリは前の評価A の実測から（平均 0.5〜1.4 コア、最大メモリ 59G = handover、two_arm_lift 49G）。
 set -euo pipefail
 TASK=${TASK:-two_arm_lift}
 CONFIG=${CONFIG:-$HOME/viking-eval/viking_eval_jobs/evalA_best/two_arm_lift_hl.yaml}
