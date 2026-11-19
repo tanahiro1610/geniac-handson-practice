@@ -35,7 +35,7 @@ cd ~/viking-eval && git pull && cp viking_eval_jobs/*.sh viking_eval_jobs/*.py ~
 
 ## Mac で GPU の使用状況を見る
 
-`mac/gpu_watch.sh` は **Mac で動かす**スクリプトです。30 秒ごとに `ssh gmo` で squeue を取り、`~/gpu_status.html`（GPU の使用率メーター、GPU ごとのジョブと経過時間、直近の使用量グラフ、待っているジョブ）を書き直します。ブラウザで開いておけば自動で更新されます。見た目は黒とオレンジの警告パネル風（`THEME=eva`、既定）です。前の青いダッシュボードに戻すときは `THEME=plain bash viking_eval_jobs/mac/gpu_watch.sh` と打ちます。CPU のコア使用率は総数 64 コアで計算します（変えるときは `TEAM_CPUS=96 bash ...` のように打ちます）。`~/.gpu_watch_names` に「ユーザーID 表示名」を1行ずつ書くと、ID の代わりに名前で出ます。
+`mac/gpu_watch.sh` は **Mac で動かす**スクリプトです。30 秒ごとに `ssh gmo` で squeue を取り、`~/gpu_status.html`（GPU の使用率メーター、GPU ごとのジョブと経過時間、直近の使用量グラフ、待っているジョブ）を書き直します。ブラウザで開いておけば自動で更新されます。見た目は黒とオレンジの警告パネル風（`THEME=eva`、既定）です。前の青いダッシュボードに戻すときは `THEME=plain bash viking_eval_jobs/mac/gpu_watch.sh` と打ちます。CPU のコア使用率は総数 64 コアで計算します（変えるときは `TEAM_CPUS=96 bash ...` のように打ちます）。RTX PRO 6000（チームの VM）は `ssh rtx` で `nvidia-smi` を読んで、使用率・VRAM・温度・電力と GPU を使っているプロセスを出します（`RTX_HOST=` で非表示）。`~/.gpu_watch_names` に「ユーザーID 表示名」を1行ずつ書くと、ID の代わりに名前で出ます。
 
 ```bash
 git clone -b eval-jobs --depth 1 https://github.com/tanahiro1610/geniac-handson-practice.git ~/viking-eval

@@ -5,6 +5,8 @@
 #   INTERVAL=60 bash gpu_watch.sh
 #   THEME=plain bash gpu_watch.sh   (前の見た目に戻す)
 # Optional ~/.gpu_watch_names: one "user_000xx_1a6e94 表示名" per line, to show names instead of IDs.
+# RTX PRO 6000 (team VM, no Slurm) is read with nvidia-smi over `ssh rtx`; RTX_HOST= (empty) turns it off.
+#   Add its login name to ~/.gpu_watch_names too, e.g. "h_tanaka たな".
 # Needs `ssh gmo` to work. One ssh connection is kept open, so the passphrase is asked once.
 INTERVAL=${INTERVAL:-30}
 HOST=${HOST:-gmo}
@@ -14,13 +16,16 @@ TEAM_CPUS=${TEAM_CPUS:-64}
 OUT=${OUT:-$HOME/gpu_status.html}
 HIST=${HIST:-$HOME/.gpu_watch_history}
 NAMES=${NAMES:-$HOME/.gpu_watch_names}
+RTX_HOST=${RTX_HOST-rtx}
 THEME=${THEME:-eva}   # eva = 黒とオレンジの警告パネル風 / plain = 前の見た目
 CP="$HOME/.ssh/cm-gpuwatch-%r@%h:%p"
 SSH=(ssh -o ControlMaster=auto -o ControlPath="$CP" -o ControlPersist=10m -o ConnectTimeout=15 "$HOST")
+SSHR=(ssh -o ControlMaster=auto -o ControlPath="$CP" -o ControlPersist=10m -o ConnectTimeout=10 "$RTX_HOST")
 
 "${SSH[@]}" true || { echo "ssh $HOST failed"; exit 1; }
 ME=$("${SSH[@]}" 'echo $USER')
-trap '"${SSH[@]}" -O exit >/dev/null 2>&1; rm -f "$TASKF"; echo; echo stopped; exit 0' INT TERM
+if [ -n "$RTX_HOST" ]; then "${SSHR[@]}" true || echo "ssh $RTX_HOST failed: RTX は OFFLINE と表示します（RTX_HOST= で非表示）"; fi
+trap '"${SSH[@]}" -O exit >/dev/null 2>&1; [ -n "$RTX_HOST" ] && "${SSHR[@]}" -O exit >/dev/null 2>&1; rm -f "$TASKF" "$RTXF" "$RTXF.err"; echo; echo stopped; exit 0' INT TERM
 touch "$HIST" "$NAMES"
 
 EVA_CSS=$(cat <<'CSS'
@@ -84,6 +89,14 @@ table{width:100%;border-collapse:collapse;font-size:13px;font-family:var(--s)}th
 .slot.mini{--bc:#b48cff;--cut:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px));min-height:0}.slot.mini.me{--bc:var(--g)}.slot.mini.warn{--bc:var(--r)}
 .slot.mini .in{padding:8px 12px 10px}.slot.mini .name{font-size:17px}.slot.mini .tl b{font-size:28px}.slot.mini .top{font-size:14px}
 .empty{padding:12px 16px}
+.rtx{--x:#31e6ff;margin-bottom:16px;border-color:#124a55}.rtx .ph{background:var(--x)}.rtx .hx1{stroke:var(--x);filter:drop-shadow(0 0 6px var(--x))}.rtx .hx1.full{stroke:var(--r)}.rtx .lab{fill:var(--x);font-size:17px}
+.rgrid{display:grid;grid-template-columns:190px 300px 1fr;gap:16px;padding:12px;align-items:start}.rgrid .hg svg{max-width:190px}
+.meter{--bc:var(--x);margin-bottom:9px}.meter.hot{--bc:var(--r)}.mh{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--sub);font-family:var(--s)}.mh b{font-family:var(--d);font-size:21px;color:#fff;font-weight:700}
+.rprocs{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}.slot.rp{--bc:var(--x)}.slot.rp.me{--bc:var(--g)}.slot.rp.free{--bc:#123a42}.slot.rp.free .top,.slot.rp.free .idle{color:#1d5a66}.slot.rp .name .u{margin-right:8px}
+.cmd{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--sub);word-break:break-all;line-height:1.35;max-height:2.8em;overflow:hidden}
+.rtag{font-style:normal;margin-left:auto;font-family:var(--m);font-weight:900;font-size:16px;padding:2px 12px;border:1px solid #31e6ff;color:#31e6ff}.rtag.busy{background:#31e6ff;color:#000}.rtag.off{border-color:var(--r);color:var(--r)}
+.sw.rx{background:#31e6ff}
+@media(max-width:1100px){.rgrid{grid-template-columns:1fr 1fr}.rprocs{grid-column:1/-1}}
 @media(max-width:1000px){.grid,.two{grid-template-columns:1fr}.slots{grid-template-columns:repeat(2,1fr)!important}}
 CSS
 )
@@ -98,8 +111,8 @@ render() {
   local data="$1" now="$2" err="$3" epoch
   epoch=$(date +%s)
   # Multi-line text (CSS, JS, ssh errors) goes through the environment: macOS awk rejects newlines in -v.
-  echo "$data" | ECSS="$EVA_CSS" EJS="$EVA_JS" GW_ERR="$err" awk -F'|' -v me="$ME" -v total="$TEAM_GPUS" -v now="$now" -v epoch="$epoch" \
-      -v interval="$INTERVAL" -v part="$PART" -v hist="$HIST" -v names="$NAMES" -v taskf="$TASKF" -v theme="$THEME" -v tcpu="$TEAM_CPUS" '
+  echo "$data" | ECSS="$EVA_CSS" EJS="$EVA_JS" GW_ERR="$err" RTX_ON="${RTX_HOST:+1}" RTX_ERR="$rtx_err" awk -F'|' -v me="$ME" -v total="$TEAM_GPUS" -v now="$now" -v epoch="$epoch" \
+      -v interval="$INTERVAL" -v part="$PART" -v hist="$HIST" -v names="$NAMES" -v taskf="$TASKF" -v theme="$THEME" -v tcpu="$TEAM_CPUS" -v rtxf="$RTXF" '
     function e(s){ gsub(/&/,"\\&amp;",s); gsub(/</,"\\&lt;",s); gsub(/>/,"\\&gt;",s); return s }
     function gpus(s,  n){ if (s !~ /gpu/) return 0; n=s; sub(/.*gpu[^0-9]*/,"",n); n+=0; return (n>0?n:1) }
     function secs(t,  d,p,a,n){ if (t !~ /^[0-9]/) return 0; d=0
@@ -114,11 +127,15 @@ render() {
       else if (r ~ /Dependency/) c="#8b5cf6"; else if (r ~ /ArrayTaskLimit/) c="#06b6d4"; else if (r ~ /Priority|Resources/) c="#3b82f6"
       return "<span class=\"chip\" style=\"--c:" c "\">" e(r) "</span>" }
     function hms(s){ if (s<0) s=0; return sprintf("%02d:%02d:%02d", int(s/3600), int((s%3600)/60), s%60) }
-    function hexg(v,tot,lab,   p,c){
-      p=(tot>0? v/tot : 0); if (p>1) p=1; c=(p>=.9?" full":"")
+    function hexg(v,tot,lab,   p){
+      p=(tot>0? v/tot : 0); if (p>1) p=1
+      hexr(p, sprintf("%s %d%%", lab, p*100), v, "/ " tot)
+    }
+    function hexr(p,top,big,bot,   c){
+      c=(p>=.9?" full":"")
       printf "<div class=\"hg\"><svg viewBox=\"0 0 200 200\"><polygon points=\"100,10 180,56 180,144 100,190 20,144 20,56\" class=\"hx0\"/>"
       printf "<polygon points=\"100,10 180,56 180,144 100,190 20,144 20,56\" class=\"hx1%s\" style=\"stroke-dasharray:%.1f 600\"/>", c, 553*p
-      printf "<text x=\"100\" y=\"60\" class=\"lab\">%s %d%%</text><text x=\"100\" y=\"124\" class=\"big%s\">%d</text><text x=\"100\" y=\"154\" class=\"lab\">/ %d</text></svg></div>", lab, p*100, (length(v "")>2?" sm":""), v, tot
+      printf "<text x=\"100\" y=\"60\" class=\"lab\">%s</text><text x=\"100\" y=\"124\" class=\"big%s\">%s</text><text x=\"100\" y=\"154\" class=\"lab\">%s</text></svg></div>", top, (length(big "")>2?" sm":""), big, bot
     }
     function card(i,cls,label,   lim,frac,title,sub2){
       lim=R_l[i]; frac=(lim>0? R_t[i]/lim : 0); if (frac>1) frac=1
@@ -130,6 +147,36 @@ render() {
       else printf "<div class=\"tl\"><span>経過時間</span><b data-rem=\"%d\" data-up=\"1\">%s</b></div>", R_t[i], hms(R_t[i])
       printf "<div class=\"seg\"><i style=\"width:%d%%\"></i></div><div class=\"meta\"><span>%s コア · %s</span><span>%s</span></div></div></div>\n", frac*100, R_c[i], e(R_m[i]), (lim>0? "上限 " hm(lim) : "")
     }
+    function meter(lab,val,frac,hot){
+      if (frac<0) frac=0; if (frac>1) frac=1
+      printf "<div class=\"meter%s\"><div class=\"mh\"><span>%s</span><b>%s</b></div><div class=\"seg\"><i style=\"width:%d%%\"></i></div></div>", (hot?" hot":""), lab, val, frac*100
+    }
+    function rtxtag(){
+      if (!rtx_on) return ""
+      if (!rtx_ok) return "<em class=\"rtag off\">RTX 通信途絶</em>"
+      return (rn? "<em class=\"rtag busy\">RTX 使用中 " rn "</em>" : "<em class=\"rtag\">RTX 空き</em>")
+    }
+    function rtxpanel(   i){
+      print "<div class=\"panel rtx\"><div class=\"ph\">■ RTX PRO 6000<i>Team VM · no Slurm · nvidia-smi</i></div>"
+      if (!rtx_ok) { print "<div class=\"alert red\" style=\"margin:12px\"><b class=\"blink\">通信途絶</b><span>RTX OFFLINE — " e(rtx_err) "</span></div></div>"; return }
+      print "<div class=\"rgrid\"><div>"
+      hexr(RU/100, "GPU 使用率", RU "%", (rn? rn " プロセス" : "空き"))
+      print "</div><div class=\"meters\">"
+      meter("VRAM", sprintf("%.1f / %.0f GB", RMU/1024, RMT/1024), (RMT>0? RMU/RMT : 0), (RMT>0 && RMU/RMT>=.9))
+      meter("温度", RT " ℃", RT/100, RT>=85)
+      meter("電力", sprintf("%.0f / %.0f W", RP, RPL), (RPL>0? RP/RPL : 0), (RPL>0 && RP/RPL>=.95))
+      if (RNC>0) meter("VM の CPU 負荷", sprintf("%.1f / %d", RLD, RNC), RLD/RNC, RLD/RNC>=.9)
+      if (RRT>0) meter("VM のメモリ", sprintf("%.0f / %.0f GB", RRU/1024, RRT/1024), RRU/RRT, RRU/RRT>=.9)
+      printf "<div class=\"meta\"><span>%s</span></div></div><div class=\"rprocs\">", e(RG)
+      if (!rn) print "<div class=\"slot mini rp free\"><div class=\"in\"><div class=\"top\"><span>RTX</span><span class=\"st\">待機</span></div><div class=\"idle\">STANDBY</div><div class=\"meta\"><span>GPU を使っているプロセスはありません</span></div></div></div>"
+      for (i=1;i<=rn;i++) {
+        printf "<div class=\"slot mini rp%s\"><div class=\"in\"><div class=\"top\"><span>PID %s</span><span class=\"st\">使用中</span></div>", (RPU[i]==rme?" me":""), e(RPID[i])
+        printf "<div class=\"name\"><i class=\"u\" style=\"--h:%d\"></i>%s</div><div class=\"cmd\">%s</div>", hue(RPU[i]), e(who(RPU[i])), e(RPC[i])
+        printf "<div class=\"tl\"><span>経過時間</span><b data-rem=\"%d\" data-up=\"1\">%s</b></div>", RPT[i], hms(RPT[i])
+        printf "<div class=\"seg\"><i style=\"width:%d%%\"></i></div><div class=\"meta\"><span>VRAM %.1f GB</span><span>%d%%</span></div></div></div>\n", (RMT>0? RPM[i]*100/RMT : 0), RPM[i]/1024, (RMT>0? RPM[i]*100/RMT : 0)
+      }
+      print "</div></div></div>"
+    }
     function eva(   i,j,s,n0,cnt,W,H,pts,cpts,x,y,py,k,mins,nc,cc,cfree){
       cfree=(tcpu-cu>0? tcpu-cu : 0)
       print "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
@@ -138,18 +185,18 @@ render() {
       print "<header><div><div class=\"en\">Team VIKING // Compute node status // " e(part) "</div><h1>計算資源稼働状況</h1><div class=\"en\">Operator: " e(who(me)) "</div></div>"
       print "<div class=\"clock\"><div class=\"en\">Last sync</div><b>" now "</b><div class=\"en\">Next sync <span id=\"cd\">" interval "</span> sec</div></div></header>"
       if (err!="") print "<div class=\"alert red\"><b class=\"blink\">通信途絶</b><span>CONNECTION LOST — " e(err) "</span></div>"
-      else if (free==0) printf "<div class=\"alert red\"><b class=\"blink\">空きGPUなし</b><span>ALL GPU UNITS ENGAGED — %d JOB(S) WAITING · CPU %d CORES FREE</span></div>\n", np, cfree
-      else printf "<div class=\"alert ok\"><b>空き GPU %d 基 ・ CPU %d コア</b><span>STANDING BY</span></div>\n", free, cfree
+      else if (free==0) printf "<div class=\"alert red\"><b class=\"blink\">空きGPUなし</b><span>ALL B300 UNITS ENGAGED — %d JOB(S) WAITING · CPU %d CORES FREE</span>%s</div>\n", np, cfree, rtxtag()
+      else printf "<div class=\"alert ok\"><b>空き B300 %d 基 ・ CPU %d コア</b><span>STANDING BY</span>%s</div>\n", free, cfree, rtxtag()
       # ---- row 1: resources | running jobs
-      print "<div class=\"grid\"><div class=\"panel res\"><div class=\"ph\">■ 資源<i>Resources</i></div><div class=\"gauges\">"
-      hexg(used+0, total, "GPU"); hexg(cu+0, tcpu, "CPU")
+      print "<div class=\"grid\"><div class=\"panel res\"><div class=\"ph\">■ B300 ノード<i>Slurm · " e(part) "</i></div><div class=\"gauges\">"
+      hexg(used+0, total, "B300"); hexg(cu+0, tcpu, "CPU")
       printf "</div><div class=\"cpu%s\"><div class=\"cl\"><span>CPU コア割り当て</span><em>1 マス = 1 コア</em></div><div class=\"cells\">", (tcpu>0 && cu/tcpu>=.9?" hot":"")
       k=0; for (i=1;i<=nr;i++) for (j=1;j<=R_c[i]+0 && k<tcpu;j++) { k++; printf "<i class=\"%s\"></i>", (R_u[i]==me?"me":(R_g[i]==0?"co":"on")) }
       while (k<tcpu) { k++; printf "<i></i>" }
       printf "</div><div class=\"meta\"><span><i class=\"sw on\"></i>GPU ジョブ <i class=\"sw co\"></i>CPU のみ <i class=\"sw me\"></i>自分</span><span>自分 %d コア</span></div></div>\n", cme
       printf "<div class=\"stats\"><div><b>%d</b><span>空き GPU</span></div><div><b>%d</b><span>空き CPU</span></div><div><b>%d</b><span>実行中</span></div><div><b>%d</b><span>待ち</span></div></div></div>\n", free, cfree, nr, np
-      print "<div class=\"panel\"><div class=\"ph\">■ 稼働中のジョブ<i>Running</i></div>"
-      printf "<div class=\"lbl\"><b>GPU ユニット</b><span>%d / %d 基使用</span></div><div class=\"slots\" style=\"grid-template-columns:repeat(%d,1fr)\">\n", used, total, total
+      print "<div class=\"panel\"><div class=\"ph\">■ B300 稼働中のジョブ<i>Running</i></div>"
+      printf "<div class=\"lbl\"><b>B300 ユニット</b><span>%d / %d 基使用</span></div><div class=\"slots\" style=\"grid-template-columns:repeat(%d,1fr)\">\n", used, total, total
       s=0
       for (i=1;i<=nr;i++) for (j=1;j<=R_g[i] && s<total;j++) { s++; card(i, "slot busy", sprintf("GPU-%02d", s)) }
       while (s<total) { s++; printf "<div class=\"slot free\"><div class=\"in\"><div class=\"top\"><span>GPU-%02d</span><span class=\"st\">待機</span></div><div class=\"idle\">STANDBY</div><div class=\"meta\"><span>いつでも使えます</span></div></div></div>\n", s }
@@ -159,19 +206,22 @@ render() {
       if (nc) { print "<div class=\"minis\">"; for (i=1;i<=nr;i++) if (R_g[i]==0) card(i, "slot mini", "CPU ONLY"); print "</div>" }
       else print "<div class=\"empty\">NO CPU-ONLY JOBS — なし</div>"
       print "</div></div>"
+      if (rtx_on) rtxpanel()
       # ---- row 2: history | pending
       print "<div class=\"two\"><div class=\"panel\"><div class=\"ph\">■ 稼働履歴<i>Load history</i></div><div class=\"pb\">"
       n0=(nh>240? nh-239 : 1); cnt=nh-n0+1
       if (cnt>=2) {
-        W=600; H=130; pts=""; cpts=""
+        W=600; H=130; pts=""; cpts=""; rpts=""
         for (i=n0;i<=nh;i++) { x=(i-n0)*W/(cnt-1); y=H-6-(HU[i]/total)*(H-12); if (i>n0) pts=pts sprintf("%.1f,%.1f ",x,py); pts=pts sprintf("%.1f,%.1f ",x,y); py=y
-          if (HC[i]>=0 && tcpu>0) cpts=cpts sprintf("%.1f,%.1f ", x, H-6-(HC[i]>tcpu?1:HC[i]/tcpu)*(H-12)) }
+          if (HC[i]>=0 && tcpu>0) cpts=cpts sprintf("%.1f,%.1f ", x, H-6-(HC[i]>tcpu?1:HC[i]/tcpu)*(H-12))
+          if (HR[i]>=0) rpts=rpts sprintf("%.1f,%.1f ", x, H-6-(HR[i]>100?1:HR[i]/100)*(H-12)) }
         printf "<svg class=\"spark\" viewBox=\"0 0 %d %d\" preserveAspectRatio=\"none\"><defs><linearGradient id=\"g\" x1=\"0\" x2=\"0\" y1=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#ff8a00\" stop-opacity=\".4\"/><stop offset=\"1\" stop-color=\"#ff8a00\" stop-opacity=\"0\"/></linearGradient></defs>", W, H
         for (k=0;k<=4;k++) printf "<line x1=\"0\" x2=\"%d\" y1=\"%.1f\" y2=\"%.1f\" stroke=\"%s\" stroke-dasharray=\"2 5\"/>", W, H-6-(k/4)*(H-12), H-6-(k/4)*(H-12), (k==4?"#ff2a1a66":"#5a3a12")
         printf "<polygon points=\"0,%d %s%d,%d\" fill=\"url(#g)\"/><polyline points=\"%s\" fill=\"none\" stroke=\"#ff8a00\" stroke-width=\"2.5\" vector-effect=\"non-scaling-stroke\"/>", H, pts, W, H, pts
         if (cpts!="") printf "<polyline points=\"%s\" fill=\"none\" stroke=\"#b48cff\" stroke-width=\"2\" stroke-dasharray=\"6 3\" vector-effect=\"non-scaling-stroke\"/>", cpts
+        if (rpts!="") printf "<polyline points=\"%s\" fill=\"none\" stroke=\"#31e6ff\" stroke-width=\"1.5\" stroke-dasharray=\"2 3\" vector-effect=\"non-scaling-stroke\"/>", rpts
         print "</svg>"
-        mins=int((HT[nh]-HT[n0])/60); printf "<div class=\"meta\"><span>%d 分前</span><span><i class=\"sw on\"></i>GPU（%d 基）　<i class=\"sw co\"></i>CPU（%d コア）　赤線 = 満杯</span><span>現在</span></div>", mins, total, tcpu
+        mins=int((HT[nh]-HT[n0])/60); printf "<div class=\"meta\"><span>%d 分前</span><span><i class=\"sw on\"></i>B300（%d 基）　<i class=\"sw co\"></i>CPU（%d コア）%s　赤線 = 満杯</span><span>現在</span></div>", mins, total, tcpu, (rtx_on? "　<i class=\"sw rx\"></i>RTX 使用率" : "")
       } else print "<div class=\"empty\">DATA COLLECTING — 2 回目の更新から表示</div>"
       print "</div></div><div class=\"panel\"><div class=\"ph\">■ 待機ジョブ<i>Pending queue</i></div><div class=\"pb\">"
       if (np) { print "<table><tr><th>JOB</th><th>USER</th><th>NAME</th><th>GPU</th><th>CPU</th><th>MEM</th><th>REASON</th></tr>"
@@ -183,7 +233,15 @@ render() {
     }
     BEGIN { ecss=ENVIRON["ECSS"]; ejs=ENVIRON["EJS"]; err=ENVIRON["GW_ERR"]
             while ((getline line < names) > 0) { split(line,a," "); if (a[1]!="") { sub(/^[^ ]+ +/,"",line); alias[a[1]]=line } }
-            while ((getline line < taskf) > 0) { split(line,a,"|"); if (a[1]!="") TK[a[1]]=a[2] } }
+            while ((getline line < taskf) > 0) { split(line,a,"|"); if (a[1]!="") TK[a[1]]=a[2] }
+            rtx_on=(ENVIRON["RTX_ON"]!=""); rtx_err=ENVIRON["RTX_ERR"]; rn=0
+            if (rtx_on) while ((getline line < rtxf) > 0) {
+              if (line ~ /^@@ME /) rme=substr(line,6)
+              else if (line ~ /^@@GPU /) { split(substr(line,7),b,", *"); RG=b[1]; RU=b[2]+0; RMU=b[3]+0; RMT=b[4]+0; RT=b[5]+0; RP=b[6]+0; RPL=b[7]+0 }
+              else if (line ~ /^@@SYS /) { split(substr(line,7),b," "); RNC=b[1]+0; RLD=b[2]+0; RRU=b[3]+0; RRT=b[4]+0 }
+              else if (line ~ /^@@P /) { split(substr(line,5),b,"|"); rn++; RPID[rn]=b[1]; RPU[rn]=b[2]; RPT[rn]=b[3]+0; RPM[rn]=b[4]+0; RPC[rn]=b[5] } }
+            rtx_ok=(rtx_on && RG!="")
+            if (rtx_on && !rtx_ok && rtx_err=="") rtx_err="nvidia-smi の出力がありません" }
     NF>=9 {
       for (k=1;k<=NF;k++) gsub(/^ +| +$/,"",$k)
       g=gpus($6)
@@ -195,8 +253,8 @@ render() {
       } else { np++; P_id[np]=$1; P_u[np]=$2; P_n[np]=$3; P_g[np]=g; P_r[np]=$9; P_c[np]=$7; P_m[np]=$8 }
     }
     END {
-      if (err=="") { print epoch, used+0, cu+0 >> hist; close(hist) }
-      nh=0; while ((getline line < hist) > 0) { split(line,a," "); nh++; HT[nh]=a[1]; HU[nh]=a[2]; HC[nh]=(a[3]==""? -1 : a[3]+0) }
+      if (err=="") { print epoch, used+0, cu+0, (rtx_ok? RU : -1) >> hist; close(hist) }
+      nh=0; while ((getline line < hist) > 0) { split(line,a," "); nh++; HT[nh]=a[1]; HU[nh]=a[2]; HC[nh]=(a[3]==""? -1 : a[3]+0); HR[nh]=(a[4]==""? -1 : a[4]+0) }
       free=total-used; if (free<0) free=0
       if (theme=="eva") { eva(); exit }
       print "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
@@ -236,6 +294,12 @@ render() {
       }
       while (s<total) { s++; printf "<div class=\"slot free\"><div><div class=\"gpu\">GPU %d</div><div class=\"name\">空き</div></div><div class=\"meta\"><span>いつでも使えます</span></div></div>\n", s }
       print "</div></div></div>"
+      if (rtx_on) { print "<div class=\"card\" style=\"margin-bottom:18px\"><h2>RTX PRO 6000</h2>"
+        if (!rtx_ok) print "<div class=\"err\">取得に失敗しました： " e(rtx_err) "</div>"
+        else { printf "<div class=\"sub\">使用率 <b>%d%%</b> ・ VRAM %.1f / %.0f GB ・ %d ℃ ・ %.0f W</div><table><tr><th>PID</th><th>ユーザー</th><th>VRAM</th><th>経過</th><th>コマンド</th></tr>", RU, RMU/1024, RMT/1024, RT, RP
+          for (i=1;i<=rn;i++) printf "<tr%s><td>%s</td><td><span class=\"u\" style=\"--h:%d\"></span>%s</td><td>%.1f GB</td><td>%s</td><td>%s</td></tr>", (RPU[i]==rme?" class=\"me\"":""), e(RPID[i]), hue(RPU[i]), e(who(RPU[i])), RPM[i]/1024, hm(RPT[i]), e(RPC[i])
+          print "</table>"; if (!rn) print "<div class=\"empty\">GPU を使っているプロセスはありません</div>" }
+        print "</div>" }
       print "<div class=\"two\"><div class=\"card\"><h2>使用中の GPU（直近）</h2>"
       n0=(nh>240? nh-239 : 1); cnt=nh-n0+1
       if (cnt>=2) {
@@ -281,6 +345,21 @@ true
 R
 )
 TASKF=$(mktemp)
+RTXF=$(mktemp)
+# Runs on the RTX VM: GPU summary, VM load/memory, and each GPU process with its owner and age.
+RTX_REMOTE=$(cat <<'R'
+echo "@@ME $(id -un)"
+nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,power.limit --format=csv,noheader,nounits | head -1 | sed 's/^/@@GPU /'
+echo "@@SYS $(nproc) $(cut -d' ' -f1 /proc/loadavg) $(free -m | awk '/^Mem:/{print $3, $2}')"
+nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader,nounits 2>/dev/null | while IFS=', ' read -r pid mem; do
+  case "$pid" in ''|*[!0-9]*) continue;; esac
+  set -- $(ps -o user:32=,etimes= -p "$pid" 2>/dev/null)
+  cmd=$(ps -o args= -p "$pid" 2>/dev/null | cut -c1-90 | tr '|' '/')
+  echo "@@P $pid|${1:-?}|${2:-0}|$mem|$cmd"
+done
+true
+R
+)
 
 first=1
 while true; do
@@ -291,6 +370,12 @@ while true; do
     printf '%s\n' "$out" | sed '1,/^@@TASKS$/d' > "$TASKF"
   else
     err="$out"; data=""; : > "$TASKF"
+  fi
+  rtx_err=""
+  if [ -n "$RTX_HOST" ]; then
+    if ! "${SSHR[@]}" bash -s <<<"$RTX_REMOTE" > "$RTXF" 2> "$RTXF.err"; then
+      rtx_err=$(head -c 300 "$RTXF.err" | tr '\n' ' '); [ -n "$rtx_err" ] || rtx_err="ssh $RTX_HOST failed"; : > "$RTXF"
+    fi
   fi
   render "$data" "$now" "$err"
   if [ $first = 1 ]; then open "$OUT" 2>/dev/null || echo "open $OUT in your browser"; first=0; fi
