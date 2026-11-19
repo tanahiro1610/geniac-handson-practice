@@ -23,6 +23,10 @@
 
 ## 評価A：two_arm_lift を高レベル API で（50試行）
 
+いちばん簡単なのは `evalA_hl.sh`（`~/jobs/evalA.sh` と同じ中身で、タスクの設定ファイルを替えられる版）：
+`sbatch ~/viking-eval/viking_eval_jobs/evalA_best/evalA_hl.sh` → `runs/evalA_hl_two_arm_lift_401-450`。
+以下は spec を手で作るやり方。
+
 `two_arm_lift_hl.yaml` は、評価A の two_arm_lift の設定の3か所だけを変えたもの：
 - API
 - プロンプト（評価B のもの。ゴールの文は評価A の文）
