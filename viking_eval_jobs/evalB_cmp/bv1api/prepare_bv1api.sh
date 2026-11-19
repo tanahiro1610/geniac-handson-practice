@@ -25,5 +25,6 @@ cp "$BL/patches/geniac_prize/skill-library.patch" "$STAGE/submission/"
 cp "$HERE/runner-baseline-v1-api.yaml" "$HERE/runner-bv1-best.yaml" "$STAGE/"
 sed "s#@BASE_SIF@#$BASE_SIF#" "$HERE/capx-submission-bv1api.def.in" > "$STAGE/capx-submission-bv1api.def"
 git -C "$BL" rev-parse HEAD > "$STAGE/submission/BASELINE_REV"
+chmod -R a+rX "$STAGE"   # the image keeps these modes; the container runs as the user, not root
 ls -l "$STAGE" "$STAGE/submission"
 echo "next: sbatch $HERE/build_bv1api.sbatch"

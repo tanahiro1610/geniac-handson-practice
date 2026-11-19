@@ -22,16 +22,21 @@ From: @BASE_SIF@
     cp franka_two_arm_handover.yaml franka_two_arm_handover_hl.yaml
     cp franka_libero.yaml franka_libero_hl.yaml
     bash /opt/baseline-submission/install.sh /workspace/capx
+    # Files copied in keep the stage's mode (rw-rw---- under the cluster's umask) and become root-owned, so the
+    # user running the container could not read the new task configs (franka_spill_wipe.yaml etc.).
+    chmod -R a+rX /workspace/capx/env_configs /opt/baseline-submission
     cd /workspace/capx
     # Fail the build if an API name does not exist in this image's CaP-X.
     python - <<'PY'
-import glob, yaml
+import glob, os, yaml
 from capx.integrations import list_apis
 known = set(list_apis())
 for f in sorted(glob.glob("env_configs/gateway/franka_*.yaml")):
     apis = yaml.safe_load(open(f))["apis"]
     missing = [a for a in apis if a not in known]
     print(f, apis, "MISSING " + str(missing) if missing else "ok")
+    assert os.stat(f).st_mode & 0o004, f + " is not world-readable"
+
     assert not missing, f
 for r in ("runner-baseline-v1-api.yaml", "runner-bv1-best.yaml"):
     print(r, yaml.safe_load(open("env_configs/gateway/" + r))["task_map"])
