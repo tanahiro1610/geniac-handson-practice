@@ -347,19 +347,19 @@ R
 TASKF=$(mktemp)
 RTXF=$(mktemp)
 # Runs on the RTX VM: GPU summary, VM load/memory, and each GPU process with its owner and age.
-RTX_REMOTE=$(cat <<'R'
+# read -d '' (not $(cat <<...)): macOS bash 3.2 miscounts parentheses inside $( ).
+IFS= read -r -d '' RTX_REMOTE <<'R'
 echo "@@ME $(id -un)"
 nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,power.limit --format=csv,noheader,nounits | head -1 | sed 's/^/@@GPU /'
 echo "@@SYS $(nproc) $(cut -d' ' -f1 /proc/loadavg) $(free -m | awk '/^Mem:/{print $3, $2}')"
 nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader,nounits 2>/dev/null | while IFS=', ' read -r pid mem; do
-  case "$pid" in ''|*[!0-9]*) continue;; esac
+  [ "$pid" -gt 0 ] 2>/dev/null || continue
   set -- $(ps -o user:32=,etimes= -p "$pid" 2>/dev/null)
   cmd=$(ps -o args= -p "$pid" 2>/dev/null | cut -c1-90 | tr '|' '/')
   echo "@@P $pid|${1:-?}|${2:-0}|$mem|$cmd"
 done
 true
 R
-)
 
 first=1
 while true; do
