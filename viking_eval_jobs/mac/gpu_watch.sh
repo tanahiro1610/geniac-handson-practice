@@ -7,6 +7,9 @@
 # Optional ~/.gpu_watch_names: one "user_000xx_1a6e94 表示名" per line, to show names instead of IDs.
 # RTX PRO 6000 (team VM, no Slurm) is read with nvidia-smi over `ssh rtx`; RTX_HOST= (empty) turns it off.
 #   Add its login name to ~/.gpu_watch_names too, e.g. "h_tanaka たな".
+# Sharing with the team: PUBLISH_DIR=~/viking-gpu-status (a clone of a private GitHub repo) makes it also
+#   push a neutral copy of the page (no "mine" highlighting) to the repo's `status` branch every PUBLISH_EVERY
+#   seconds. Members run gpu_view.sh from that branch; they need no cluster access.
 # Needs `ssh gmo` to work. One ssh connection is kept open, so the passphrase is asked once.
 INTERVAL=${INTERVAL:-30}
 HOST=${HOST:-gmo}
@@ -17,6 +20,10 @@ OUT=${OUT:-$HOME/gpu_status.html}
 HIST=${HIST:-$HOME/.gpu_watch_history}
 NAMES=${NAMES:-$HOME/.gpu_watch_names}
 RTX_HOST=${RTX_HOST-rtx}
+PUBLISH_DIR=${PUBLISH_DIR:-}
+PUBLISH_EVERY=${PUBLISH_EVERY:-60}
+PUBLOG="$HOME/.gpu_watch_publish.log"
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 THEME=${THEME:-eva}   # eva = 黒とオレンジの警告パネル風 / plain = 前の見た目
 CP="$HOME/.ssh/cm-gpuwatch-%r@%h:%p"
 SSH=(ssh -o ControlMaster=auto -o ControlPath="$CP" -o ControlPersist=10m -o ConnectTimeout=15 "$HOST")
@@ -27,10 +34,14 @@ ME=$("${SSH[@]}" 'echo $USER')
 if [ -n "$RTX_HOST" ]; then "${SSHR[@]}" true || echo "ssh $RTX_HOST failed: RTX は OFFLINE と表示します（RTX_HOST= で非表示）"; fi
 trap '"${SSH[@]}" -O exit >/dev/null 2>&1; [ -n "$RTX_HOST" ] && "${SSHR[@]}" -O exit >/dev/null 2>&1; rm -f "$TASKF" "$RTXF" "$RTXF.err"; echo; echo stopped; exit 0' INT TERM
 touch "$HIST" "$NAMES"
+if [ -n "$PUBLISH_DIR" ]; then
+  PUBLISH_DIR=$(cd "$PUBLISH_DIR" 2>/dev/null && pwd) && git -C "$PUBLISH_DIR" rev-parse --git-dir >/dev/null 2>&1 \
+    || { echo "PUBLISH_DIR が git のクローンではありません。先に共有用リポジトリを git clone してください"; exit 1; }
+fi
 
 EVA_CSS=$(cat <<'CSS'
 :root{--o:#ff8a00;--r:#ff2a1a;--g:#3dff6e;--bg:#050505;--dim:#5a3a12;--txt:#ffd9a8;--sub:#b07a40;--m:"Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif;--d:"DIN Condensed","DIN Alternate","Bahnschrift","Arial Narrow",sans-serif;--s:"Hiragino Sans","Yu Gothic",sans-serif}
-*{box-sizing:border-box}html{background:var(--bg)}
+*{box-sizing:border-box}[hidden]{display:none!important}html{background:var(--bg)}
 body{margin:0;min-height:100vh;color:var(--txt);font-family:var(--d);background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='56' height='100'><path d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100' fill='none' stroke='%23ff8a00' stroke-opacity='.08'/></svg>"),radial-gradient(900px 500px at 85% -10%,#2a1200 0,transparent 70%),var(--bg)}
 body::after{content:"";position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.3) 0 1px,transparent 1px 3px)}
 .tape{height:14px;background:repeating-linear-gradient(-45deg,var(--o) 0 14px,#000 14px 28px)}
@@ -114,16 +125,18 @@ CSS
 EVA_JS=$(cat <<'JS'
 const c=document.getElementById("cd"),T=[...document.querySelectorAll("[data-rem]")];
 const f=x=>{x=Math.max(0,x);const p=n=>String(n).padStart(2,"0");return p(Math.floor(x/3600))+":"+p(Math.floor(x%3600/60))+":"+p(x%60)};
-setInterval(()=>{s--;if(s<=0){location.reload();return}c.textContent=s;T.forEach(t=>{const v=+t.dataset.rem+(t.dataset.up?1:-1);t.dataset.rem=v;t.textContent=f(v)})},1000)
+const st=()=>{if(Date.now()/1000-gen>Math.max(180,3*s0))document.getElementById("stale").hidden=false},s0=s;st();
+setInterval(()=>{st();s--;if(s<=0){location.reload();return}c.textContent=s;T.forEach(t=>{const v=+t.dataset.rem+(t.dataset.up?1:-1);t.dataset.rem=v;t.textContent=f(v)})},1000)
 JS
 )
 
 render() {
-  local data="$1" now="$2" err="$3" epoch
+  local data="$1" now="$2" err="$3" dest="${4:-$OUT}" shared="${5:-}" epoch me_v="$ME" iv="$INTERVAL"
+  [ -n "$shared" ] && { me_v=""; iv="$PUBLISH_EVERY"; }
   epoch=$(date +%s)
   # Multi-line text (CSS, JS, ssh errors) goes through the environment: macOS awk rejects newlines in -v.
-  echo "$data" | ECSS="$EVA_CSS" EJS="$EVA_JS" GW_ERR="$err" RTX_ON="${RTX_HOST:+1}" RTX_ERR="$rtx_err" awk -F'|' -v me="$ME" -v total="$TEAM_GPUS" -v now="$now" -v epoch="$epoch" \
-      -v interval="$INTERVAL" -v part="$PART" -v hist="$HIST" -v names="$NAMES" -v taskf="$TASKF" -v theme="$THEME" -v tcpu="$TEAM_CPUS" -v rtxf="$RTXF" -v host="$HOST" -v rhost="$RTX_HOST" '
+  echo "$data" | ECSS="$EVA_CSS" EJS="$EVA_JS" GW_ERR="$err" RTX_ON="${RTX_HOST:+1}" RTX_ERR="$rtx_err" awk -F'|' -v me="$me_v" -v shared="$shared" -v pub="$ME" -v total="$TEAM_GPUS" -v now="$now" -v epoch="$epoch" \
+      -v interval="$iv" -v part="$PART" -v hist="$HIST" -v names="$NAMES" -v taskf="$TASKF" -v theme="$THEME" -v tcpu="$TEAM_CPUS" -v rtxf="$RTXF" -v host="$HOST" -v rhost="$RTX_HOST" '
     function e(s){ gsub(/&/,"\\&amp;",s); gsub(/</,"\\&lt;",s); gsub(/>/,"\\&gt;",s); return s }
     function gpus(s,  n){ if (s !~ /gpu/) return 0; n=s; sub(/.*gpu[^0-9]*/,"",n); n+=0; return (n>0?n:1) }
     function secs(t,  d,p,a,n){ if (t !~ /^[0-9]/) return 0; d=0
@@ -193,8 +206,9 @@ render() {
       print "<!DOCTYPE html><html lang=\"ja\"><head><meta charset=\"utf-8\">"
       print "<meta http-equiv=\"refresh\" content=\"" interval+15 "\"><title>GPU " used+0 "/" total " CPU " cu+0 "/" tcpu " · VIKING</title><style>" ecss "</style></head><body>"
       print "<div class=\"tape\"></div><div class=\"wrap\">"
-      print "<header><div><div class=\"en\">Team VIKING // Compute node status // " e(part) "</div><h1>計算資源稼働状況</h1><div class=\"en\">Operator: " e(who(me)) "</div></div>"
+      print "<header><div><div class=\"en\">Team VIKING // Compute node status // " e(part) "</div><h1>計算資源稼働状況</h1><div class=\"en\">" (shared!=""? "Shared view // 配信 " e(who(pub)) : "Operator: " e(who(me))) "</div></div>"
       print "<div class=\"clock\"><div class=\"en\">Last sync</div><b>" now "</b><div class=\"en\">Next sync <span id=\"cd\">" interval "</span> sec</div></div></header>"
+      print "<div id=\"stale\" class=\"alert red\" hidden><b class=\"blink\">更新停止</b><span>最終更新 " now " から新しいデータが届いていません（配信している Mac が止まっている可能性）</span></div>"
       print "<div class=\"alerts" (rtx_on?"":" one") "\">"
       if (err!="") print "<div class=\"alert red\"><i class=\"ak\">B300</i><b class=\"blink\">通信途絶</b><span>" e(err) "</span></div>"
       else if (free==0) printf "<div class=\"alert red\"><i class=\"ak\">B300</i><b class=\"blink\">空きGPUなし</b><span>%d JOB(S) WAITING · CPU %d CORES FREE</span></div>\n", np, cfree
@@ -248,14 +262,14 @@ render() {
       } else print "<div class=\"empty\">DATA COLLECTING — 2 回目の更新から表示</div>"
       print "</div></div></div>"
       print "<div class=\"foot\">機械：<b style=\"color:#ff8a00\">橙の囲み・B300 の札</b> = B300（Slurm）　<b style=\"color:#31e6ff\">水色の囲み・RTX の札</b> = RTX PRO 6000<br>枠の色：<b style=\"color:#ff8a00\">橙</b> = 稼働中　<b style=\"color:#3dff6e\">緑</b> = 自分のジョブ　<b style=\"color:#ff2a1a\">赤</b> = 上限時間の 85% を超えた（点滅）・ CPU は割り当てられたコア数（実際の負荷ではありません）<br>理由の色：<span class=\"chip\" style=\"--c:#f59e0b\">GPU 上限</span> <span class=\"chip\" style=\"--c:#f97316\">CPU 上限</span> <span class=\"chip\" style=\"--c:#ef4444\">メモリ上限</span> <span class=\"chip\" style=\"--c:#8b5cf6\">前のジョブ待ち</span> <span class=\"chip\" style=\"--c:#06b6d4\">配列の同時実行数</span></div>"
-      print "</div><div class=\"tape\"></div><script>let s=" interval ";" ejs "</script></body></html>"
+      print "</div><div class=\"tape\"></div><script>let s=" interval ",gen=" epoch ";" ejs "</script></body></html>"
     }
     BEGIN { ecss=ENVIRON["ECSS"]; ejs=ENVIRON["EJS"]; err=ENVIRON["GW_ERR"]
             while ((getline line < names) > 0) { split(line,a," "); if (a[1]!="") { sub(/^[^ ]+ +/,"",line); alias[a[1]]=line } }
             while ((getline line < taskf) > 0) { split(line,a,"|"); if (a[1]!="") TK[a[1]]=a[2] }
             rtx_on=(ENVIRON["RTX_ON"]!=""); rtx_err=ENVIRON["RTX_ERR"]; rn=0
             if (rtx_on) while ((getline line < rtxf) > 0) {
-              if (line ~ /^@@ME /) rme=substr(line,6)
+              if (line ~ /^@@ME /) rme=(shared!=""? "" : substr(line,6))
               else if (line ~ /^@@GPU /) { split(substr(line,7),b,", *"); RG=b[1]; RU=b[2]+0; RMU=b[3]+0; RMT=b[4]+0; RT=b[5]+0; RP=b[6]+0; RPL=b[7]+0 }
               else if (line ~ /^@@SYS /) { split(substr(line,7),b," "); RNC=b[1]+0; RLD=b[2]+0; RRU=b[3]+0; RRT=b[4]+0 }
               else if (line ~ /^@@P /) { split(substr(line,5),b,"|"); rn++; RPID[rn]=b[1]; RPU[rn]=b[2]; RPT[rn]=b[3]+0; RPM[rn]=b[4]+0; RPC[rn]=b[5]; RPK[rn]=b[6]
@@ -273,7 +287,7 @@ render() {
       } else { np++; P_id[np]=$1; P_u[np]=$2; P_n[np]=$3; P_g[np]=g; P_r[np]=$9; P_c[np]=$7; P_m[np]=$8 }
     }
     END {
-      if (err=="") { print epoch, used+0, cu+0, (rtx_ok? RU : -1) >> hist; close(hist) }
+      if (err=="" && shared=="") { print epoch, used+0, cu+0, (rtx_ok? RU : -1) >> hist; close(hist) }
       nh=0; while ((getline line < hist) > 0) { split(line,a," "); nh++; HT[nh]=a[1]; HU[nh]=a[2]; HC[nh]=(a[3]==""? -1 : a[3]+0); HR[nh]=(a[4]==""? -1 : a[4]+0) }
       free=total-used; if (free<0) free=0
       if (theme=="eva") { eva(); exit }
@@ -342,7 +356,7 @@ render() {
         print "</table></div>" }
       print "<p class=\"sub\" style=\"margin-top:18px\">理由の色：<span class=\"chip\" style=\"--c:#f59e0b\">GPU 上限</span> <span class=\"chip\" style=\"--c:#f97316\">CPU 上限</span> <span class=\"chip\" style=\"--c:#ef4444\">メモリ上限</span> <span class=\"chip\" style=\"--c:#8b5cf6\">前のジョブ待ち</span> <span class=\"chip\" style=\"--c:#06b6d4\">配列の同時実行数</span> ・ バーは経過時間 / 上限時間（85% を超えると赤）</p>"
       print "<script>let s=" interval ";const c=document.getElementById(\"cd\");setInterval(()=>{s--;if(s<=0){location.reload()}else{c.textContent=s}},1000)</script></body></html>"
-    }' > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"
+    }' > "$dest.tmp" && mv "$dest.tmp" "$dest"
   tail -n 2000 "$HIST" > "$HIST.tmp" 2>/dev/null && mv "$HIST.tmp" "$HIST"
 }
 
@@ -384,6 +398,35 @@ done
 true
 R
 
+# Push a neutral copy of the page to the share repo's `status` branch (one commit, force-pushed).
+last_pub=0; pub_pid=""
+publish() {
+  [ -n "$PUBLISH_DIR" ] || return 0
+  local tnow; tnow=$(date +%s)
+  [ $((tnow - last_pub)) -ge "$PUBLISH_EVERY" ] || return 0
+  if [ -n "$pub_pid" ] && kill -0 "$pub_pid" 2>/dev/null; then return 0; fi
+  if grep -q '^PUSH FAILED' "$PUBLOG" 2>/dev/null; then echo "  ! 前回の配信に失敗しました（$PUBLOG を見てください）"; fi
+  last_pub=$tnow
+  render "$data" "$now" "$err" "$PUBLISH_DIR/index.html" 1
+  cp "$SCRIPT_DIR/gpu_view.sh" "$PUBLISH_DIR/gpu_view.sh" 2>/dev/null
+  [ -f "$PUBLISH_DIR/README.md" ] || cp "$SCRIPT_DIR/gpu_view_README.md" "$PUBLISH_DIR/README.md" 2>/dev/null
+  push_cmd() {
+    cd "$PUBLISH_DIR" && git add -A \
+      && { git -c user.name=gpu-watch -c user.email=gpu-watch@localhost commit -q --amend -m "status $now" 2>/dev/null \
+           || git -c user.name=gpu-watch -c user.email=gpu-watch@localhost commit -q -m "status $now"; } \
+      && git push -q -f origin HEAD:status
+  }
+  if [ "$first_pub" = 1 ]; then
+    # First push in the foreground, so a GitHub sign-in prompt (if any) can be answered.
+    if (push_cmd) > "$PUBLOG" 2>&1; then echo "  配信を始めました（status ブランチ）"; else echo "PUSH FAILED" >> "$PUBLOG"; echo "  ! 配信に失敗しました:"; tail -3 "$PUBLOG"; fi
+    first_pub=0
+  else
+    ( (push_cmd) > "$PUBLOG" 2>&1 || echo "PUSH FAILED" >> "$PUBLOG" ) &
+    pub_pid=$!
+  fi
+}
+first_pub=1
+
 first=1
 while true; do
   now=$(date "+%H:%M:%S")
@@ -401,6 +444,7 @@ while true; do
     fi
   fi
   render "$data" "$now" "$err"
+  publish
   if [ $first = 1 ]; then open "$OUT" 2>/dev/null || echo "open $OUT in your browser"; first=0; fi
   echo "$now updated $OUT"
   sleep "$INTERVAL"

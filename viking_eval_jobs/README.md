@@ -44,6 +44,24 @@ open ~/viking-eval/viking_eval_jobs/mac
 
 開いたフォルダの `GPU_watch.command` をダブルクリックすると、最新版に更新してからページが開きます（ターミナルのウィンドウを閉じると止まる）。
 
+## GPU 監視ページをメンバー全員に見せる
+
+1 台の Mac（配信役）だけがクラスタに問い合わせ、できたページを**非公開**の GitHub リポジトリの `status` ブランチに 1 分ごとに上げます。メンバーはそこから取ってきて見るだけなので、クラスタに ssh しません。
+
+**配信役の Mac で（最初に一度）**
+1. GitHub で空の**非公開**リポジトリ（例: `viking-gpu-status`、README なし）を作り、Settings → Collaborators でメンバーを招待する。
+2. `git clone https://github.com/<owner>/viking-gpu-status.git ~/viking-gpu-status`
+
+**配信役の Mac で（毎回）**
+
+```bash
+PUBLISH_DIR=~/viking-gpu-status bash viking_eval_jobs/mac/gpu_watch.sh
+```
+
+自分の画面はいつもどおり（自分のジョブが緑）で、配った方は誰のジョブも同じ色の中立なページになります。最初の配信で GitHub のサインインを聞かれたら答えてください。配信の記録は `~/.gpu_watch_publish.log` です。
+
+**メンバー**は、共有リポジトリの README（`mac/gpu_view_README.md` と同じもの）の手順で `gpu_view.sh` を動かします。配信が 3 分以上止まると、ページの上に赤い「更新停止」が出ます。
+
 ## 必ず守ること
 
 - **`--mem` を必ず付ける**（付けないとノードの全メモリを要求し、チーム全体が止まる）。
